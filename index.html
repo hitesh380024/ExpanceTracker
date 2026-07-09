@@ -118,6 +118,17 @@
         .chart-controls .btn{width:auto;padding:6px 14px;font-size:.75rem;margin:0;flex:1;min-width:50px}
         .chart-controls .btn.active{background:#2563eb;box-shadow:0 2px 8px rgba(37,99,235,0.3)}
         .chart-controls .btn-outline.active{background:#e2e8f0;border-color:#94a3b8;color:#1e293b}
+        
+        /* Category Filter Chips */
+        .category-filter{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 12px;padding:8px 0}
+        .category-chip{padding:4px 12px;border-radius:30px;font-size:.7rem;font-weight:500;cursor:pointer;transition:all .15s;border:2px solid #dce2ec;background:#f1f5f9;color:#64748b;user-select:none;display:inline-flex;align-items:center;gap:4px}
+        .category-chip:active{transform:scale(.95)}
+        .category-chip.active{color:#fff;border-color:transparent}
+        .category-chip .count{font-size:.6rem;opacity:.8;background:rgba(255,255,255,0.2);padding:0 6px;border-radius:20px}
+        .category-chip .check{font-size:.6rem;display:none}
+        .category-chip.active .check{display:inline}
+        .filter-actions{display:flex;gap:6px;margin-bottom:6px}
+        .filter-actions .btn{width:auto;padding:4px 12px;font-size:.7rem;margin:0;box-shadow:none}
     </style>
 </head>
 <body>
@@ -174,6 +185,24 @@
             <button class="btn btn-outline" data-range="year">Year</button>
         </div>
         
+        <!-- NEW: Breakdown Dropdown -->
+        <div style="margin-bottom:8px;">
+            <select id="breakdownSelect" style="width:100%;padding:8px 12px;border:1px solid #dce2ec;border-radius:40px;font-size:.85rem;outline:0;background:#fff;appearance:none;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22%3E%3Cpath fill=%22%2364748b%22 d=%22M6 8L1 3h10z%22/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 12px center;background-size:12px;">
+                <option value="category">Breakdown: Category</option>
+                <option value="source">Breakdown: Source</option>
+                <option value="none">Breakdown: None (Time only)</option>
+            </select>
+        </div>
+        
+        <!-- NEW: Category Filter Chips -->
+        <div id="categoryFilterContainer">
+            <div class="filter-actions">
+                <button class="btn btn-sm btn-outline" id="selectAllCategories">Select All</button>
+                <button class="btn btn-sm btn-outline" id="clearAllCategories">Clear All</button>
+            </div>
+            <div class="category-filter" id="categoryFilter"></div>
+        </div>
+        
         <div class="chart-wrapper"><canvas id="expenseChart" width="400" height="200"></canvas></div>
         <div class="flex-space mb-1">
             <div>
@@ -221,6 +250,8 @@
     let selectedDate = new Date();
     let editingId = null;
     let chartRange = 'day';
+    let breakdownType = 'category';
+    let selectedCategories = [];
 
     // ===== DOM REFS =====
     const amountInput = document.getElementById('amount');
@@ -263,17 +294,29 @@
     const saveEditBtn = document.getElementById('saveEditBtn');
     const cancelEditBtn = document.getElementById('cancelEditBtn');
     const chartControls = document.querySelectorAll('.chart-controls .btn');
+    const breakdownSelect = document.getElementById('breakdownSelect');
+    const categoryFilter = document.getElementById('categoryFilter');
+    const selectAllCategories = document.getElementById('selectAllCategories');
+    const clearAllCategories = document.getElementById('clearAllCategories');
 
     let chart = null;
     const ctx = document.getElementById('expenseChart').getContext('2d');
 
+    // ===== CATEGORY COLORS =====
+    const categoryColors = {
+        'Food': '#3b82f6',
+        'Transport': '#f59e0b',
+        'Shopping': '#ef4444',
+        'Bills': '#8b5cf6',
+        'Entertainment': '#10b981',
+        'Health': '#ec4899',
+        'Other': '#6b7280'
+    };
+
     // ===== DATE HELPERS =====
     function toLocalDateStr(date) {
         const d = new Date(date);
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     }
 
     function parseLocalDate(dateStr) {
@@ -288,16 +331,15 @@
     function formatDisplayDate(dateStr) {
         if (!dateStr) return '';
         const dt = parseLocalDate(dateStr);
-        return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        return dt.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
     }
 
-    // ===== DATA FUNCTIONS - FIXED =====
+    // ===== DATA FUNCTIONS =====
     function getDataObject() {
-        // Only include expenses, nothing else
         return {
             version: currentDataVersion,
             exportedAt: new Date().toISOString(),
-            expenses: expenses, // This is the actual expenses array
+            expenses: expenses,
             categories: categories,
             sources: sources
         };
@@ -306,8 +348,6 @@
     function loadFromDataObject(d) {
         try {
             if (!d || typeof d !== 'object') throw new Error('Invalid data format');
-            
-            // Always use the expenses array directly
             if (d.expenses && Array.isArray(d.expenses)) {
                 expenses = d.expenses;
             } else if (Array.isArray(d)) {
@@ -315,15 +355,12 @@
             } else {
                 throw new Error('No expenses array found');
             }
-            
             if (d.categories && Array.isArray(d.categories) && d.categories.length > 0) {
                 categories = d.categories;
             }
             if (d.sources && Array.isArray(d.sources) && d.sources.length > 0) {
                 sources = d.sources;
             }
-            
-            // Filter out invalid entries
             expenses = expenses.filter(e => e && typeof e === 'object' && e.amount && e.category && e.source && e.date);
             saveAll();
             return true;
@@ -340,15 +377,10 @@
             localStorage.setItem('expenseTrackerProData', JSON.stringify(data));
             dataSourceLabel.textContent = 'Local Storage';
             lastSavedLabel.textContent = `Saved: ${new Date().toLocaleTimeString()}`;
-            
-            // Also save as backup
             try {
                 sessionStorage.setItem('expenseTrackerBackup', JSON.stringify(data));
             } catch (e) {}
-            
-            // Update file info with correct counts
             updateFileInfo();
-            
             return true;
         } catch (e) {
             console.error('Save error:', e);
@@ -373,8 +405,6 @@
                     console.warn('Failed to parse stored data');
                 }
             }
-            
-            // Try backup
             stored = sessionStorage.getItem('expenseTrackerBackup');
             if (stored) {
                 try {
@@ -383,7 +413,6 @@
                         expenses = data.expenses;
                         if (data.categories) categories = data.categories;
                         if (data.sources) sources = data.sources;
-                        // Restore to localStorage
                         localStorage.setItem('expenseTrackerProData', stored);
                         return true;
                     }
@@ -414,9 +443,7 @@
         if (banner && msgEl) {
             msgEl.textContent = message;
             banner.classList.add('show');
-            setTimeout(() => {
-                banner.classList.remove('show');
-            }, 5000);
+            setTimeout(() => { banner.classList.remove('show'); }, 5000);
         }
     }
 
@@ -428,12 +455,74 @@
         infoEl.style.color = type === 'success' ? '#166534' : type === 'error' ? '#991b1b' : '#475569';
     }
 
-    // ===== POPULATE UI =====
     function populateSelects() {
         categorySelect.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
         sourceSelect.innerHTML = sources.map(s => `<option value="${s}">${s}</option>`).join('');
         editCategory.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
         editSource.innerHTML = sources.map(s => `<option value="${s}">${s}</option>`).join('');
+        renderCategoryFilters();
+    }
+
+    // ===== CATEGORY FILTER =====
+    function renderCategoryFilters() {
+        // Initialize selectedCategories if empty
+        if (selectedCategories.length === 0) {
+            selectedCategories = [...categories];
+        }
+        
+        // Remove categories that no longer exist
+        selectedCategories = selectedCategories.filter(c => categories.includes(c));
+        // Add new categories
+        categories.forEach(c => {
+            if (!selectedCategories.includes(c)) {
+                selectedCategories.push(c);
+            }
+        });
+
+        const categoryCounts = {};
+        const filtered = getFilteredExpenses();
+        filtered.forEach(exp => {
+            categoryCounts[exp.category] = (categoryCounts[exp.category] || 0) + exp.amount;
+        });
+
+        let html = '';
+        categories.forEach(cat => {
+            const isActive = selectedCategories.includes(cat);
+            const color = categoryColors[cat] || '#6b7280';
+            const count = categoryCounts[cat] || 0;
+            const activeClass = isActive ? 'active' : '';
+            html += `
+                <div class="category-chip ${activeClass}" data-category="${cat}" style="${isActive ? `background:${color};border-color:${color};` : ''}">
+                    <span class="check">✓</span>
+                    ${cat} <span class="count">₹${count.toFixed(0)}</span>
+                </div>
+            `;
+        });
+        categoryFilter.innerHTML = html;
+
+        // Click handlers for chips
+        document.querySelectorAll('.category-chip').forEach(chip => {
+            chip.addEventListener('click', function() {
+                const cat = this.dataset.category;
+                toggleCategory(cat);
+            });
+        });
+    }
+
+    function toggleCategory(category) {
+        const index = selectedCategories.indexOf(category);
+        if (index > -1) {
+            selectedCategories.splice(index, 1);
+        } else {
+            selectedCategories.push(category);
+        }
+        // If no categories selected, select all
+        if (selectedCategories.length === 0) {
+            selectedCategories = [...categories];
+        }
+        renderCategoryFilters();
+        updateDoughnutChart(getFilteredExpenses());
+        updateSourceBreakdown(getFilteredExpenses());
     }
 
     // ===== DATE SELECTION =====
@@ -497,15 +586,11 @@
     });
 
     setCustomDateBtn.addEventListener('click', function() {
-        if (customDateInput.value) {
-            setCustomDate(customDateInput.value);
-        }
+        if (customDateInput.value) setCustomDate(customDateInput.value);
     });
 
     customDateInput.addEventListener('change', function() {
-        if (this.value) {
-            setCustomDate(this.value);
-        }
+        if (this.value) setCustomDate(this.value);
     });
 
     // ===== CHART CONTROLS =====
@@ -515,7 +600,38 @@
             this.classList.add('active');
             chartRange = this.dataset.range;
             updateDoughnutChart(getFilteredExpenses());
+            updateSourceBreakdown(getFilteredExpenses());
         });
+    });
+
+    // ===== BREAKDOWN SELECT =====
+    breakdownSelect.addEventListener('change', function() {
+        breakdownType = this.value;
+        // Show/hide category filter
+        const container = document.getElementById('categoryFilterContainer');
+        if (breakdownType === 'none') {
+            container.style.display = 'none';
+        } else {
+            container.style.display = 'block';
+            renderCategoryFilters();
+        }
+        updateDoughnutChart(getFilteredExpenses());
+        updateSourceBreakdown(getFilteredExpenses());
+    });
+
+    // ===== FILTER ACTIONS =====
+    selectAllCategories.addEventListener('click', function() {
+        selectedCategories = [...categories];
+        renderCategoryFilters();
+        updateDoughnutChart(getFilteredExpenses());
+        updateSourceBreakdown(getFilteredExpenses());
+    });
+
+    clearAllCategories.addEventListener('click', function() {
+        selectedCategories = [];
+        renderCategoryFilters();
+        updateDoughnutChart(getFilteredExpenses());
+        updateSourceBreakdown(getFilteredExpenses());
     });
 
     // ===== EXPENSE CRUD =====
@@ -526,17 +642,13 @@
                 alert('Please enter a valid amount.');
                 return;
             }
-            const category = categorySelect.value;
-            const source = sourceSelect.value;
-            const description = descriptionInput.value.trim();
-            const date = getSelectedDateStr();
             const newExp = {
                 id: Date.now() + Math.random(),
                 amount: Math.round(amountVal * 100) / 100,
-                category,
-                source,
-                description,
-                date
+                category: categorySelect.value,
+                source: sourceSelect.value,
+                description: descriptionInput.value.trim() || '',
+                date: getSelectedDateStr()
             };
             expenses.push(newExp);
             saveAll();
@@ -544,10 +656,9 @@
             descriptionInput.value = '';
             amountInput.focus();
             render();
-            showFileInfo(`✅ Added expense: ₹${newExp.amount} (${category})`, 'success');
+            showFileInfo(`✅ Added expense: ₹${newExp.amount} (${newExp.category})`, 'success');
         } catch (e) {
             console.error('Add expense error:', e);
-            showError('Failed to add expense: ' + e.message);
             alert('Error adding expense. Please try again.');
         }
     }
@@ -619,18 +730,43 @@
         }
     }
 
-    function getSourceBreakdown(filtered) {
+    function updateSourceBreakdown(filtered) {
         const breakdown = {};
         filtered.forEach(exp => {
+            if (!selectedCategories.includes(exp.category)) return;
             breakdown[exp.source] = (breakdown[exp.source] || 0) + exp.amount;
         });
-        return breakdown;
+        const total = Object.values(breakdown).reduce((s, v) => s + v, 0);
+        let html = '';
+        const sourceColors = {
+            'Cash': '#10b981',
+            'Bank': '#3b82f6',
+            'UPI': '#8b5cf6',
+            'Credit Card': '#f59e0b',
+            'Other': '#6b7280'
+        };
+        Object.keys(breakdown).forEach(key => {
+            const color = sourceColors[key] || '#6b7280';
+            html += `<span style="background:${color}20;color:${color};border:1px solid ${color}40;">${key}: ₹${breakdown[key].toFixed(2)}</span>`;
+        });
+        if (html) {
+            html += `<span class="total">Total: ₹${total.toFixed(2)}</span>`;
+        } else {
+            html = '<span style="color:#94a3b8;">No expenses in this period</span>';
+        }
+        sourceBreakdownEl.innerHTML = html;
     }
 
     // ===== DOUGHNUT CHART =====
     function updateDoughnutChart(filtered) {
         try {
-            if (filtered.length === 0) {
+            // Apply category filter
+            let data = filtered;
+            if (breakdownType !== 'none') {
+                data = filtered.filter(exp => selectedCategories.includes(exp.category));
+            }
+
+            if (data.length === 0) {
                 if (chart) { chart.destroy(); chart = null; }
                 chart = new Chart(ctx, {
                     type: 'doughnut',
@@ -647,48 +783,62 @@
             let groupedData = {};
             const colors = ['#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#10b981', '#ec4899', '#6b7280', '#14b8a6', '#f97316'];
             
-            if (chartRange === 'day') {
-                filtered.forEach(exp => {
-                    const key = formatDisplayDate(exp.date);
-                    if (!groupedData[key]) {
-                        groupedData[key] = { total: 0 };
-                    }
+            // Group based on breakdown type
+            if (breakdownType === 'category') {
+                // Group by category
+                data.forEach(exp => {
+                    const key = exp.category;
+                    if (!groupedData[key]) groupedData[key] = { total: 0 };
                     groupedData[key].total += exp.amount;
                 });
-            } else if (chartRange === 'week') {
-                filtered.forEach(exp => {
-                    const date = parseLocalDate(exp.date);
-                    const weekNum = getWeekNumber(date);
-                    const weekStart = getWeekStart(date);
-                    const key = `Week ${weekNum}`;
-                    if (!groupedData[key]) {
-                        groupedData[key] = { total: 0 };
-                    }
+            } else if (breakdownType === 'source') {
+                // Group by source
+                data.forEach(exp => {
+                    const key = exp.source;
+                    if (!groupedData[key]) groupedData[key] = { total: 0 };
                     groupedData[key].total += exp.amount;
                 });
-            } else if (chartRange === 'month') {
-                filtered.forEach(exp => {
-                    const date = parseLocalDate(exp.date);
-                    const key = date.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
-                    if (!groupedData[key]) {
-                        groupedData[key] = { total: 0 };
-                    }
-                    groupedData[key].total += exp.amount;
-                });
-            } else if (chartRange === 'year') {
-                filtered.forEach(exp => {
-                    const date = parseLocalDate(exp.date);
-                    const key = date.getFullYear().toString();
-                    if (!groupedData[key]) {
-                        groupedData[key] = { total: 0 };
-                    }
-                    groupedData[key].total += exp.amount;
-                });
+            } else {
+                // None - group by time period
+                if (chartRange === 'day') {
+                    data.forEach(exp => {
+                        const key = formatDisplayDate(exp.date);
+                        if (!groupedData[key]) groupedData[key] = { total: 0 };
+                        groupedData[key].total += exp.amount;
+                    });
+                } else if (chartRange === 'week') {
+                    data.forEach(exp => {
+                        const date = parseLocalDate(exp.date);
+                        const weekNum = getWeekNumber(date);
+                        const key = `Week ${weekNum}`;
+                        if (!groupedData[key]) groupedData[key] = { total: 0 };
+                        groupedData[key].total += exp.amount;
+                    });
+                } else if (chartRange === 'month') {
+                    data.forEach(exp => {
+                        const date = parseLocalDate(exp.date);
+                        const key = date.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+                        if (!groupedData[key]) groupedData[key] = { total: 0 };
+                        groupedData[key].total += exp.amount;
+                    });
+                } else if (chartRange === 'year') {
+                    data.forEach(exp => {
+                        const date = parseLocalDate(exp.date);
+                        const key = date.getFullYear().toString();
+                        if (!groupedData[key]) groupedData[key] = { total: 0 };
+                        groupedData[key].total += exp.amount;
+                    });
+                }
             }
 
             const labels = Object.keys(groupedData);
             const dataValues = labels.map(key => groupedData[key].total);
-            const backgroundColors = labels.map((_, i) => colors[i % colors.length]);
+            const backgroundColors = labels.map((_, i) => {
+                if (breakdownType === 'category') {
+                    return categoryColors[_] || colors[i % colors.length];
+                }
+                return colors[i % colors.length];
+            });
 
             if (chart) { chart.destroy(); chart = null; }
 
@@ -744,26 +894,8 @@
             const filtered = getFilteredExpenses();
             const total = filtered.reduce((s, e) => s + e.amount, 0);
             
-            // Source breakdown
-            const breakdown = getSourceBreakdown(filtered);
-            let breakdownHtml = '';
-            const sourceColors = {
-                'Cash': '#10b981',
-                'Bank': '#3b82f6',
-                'UPI': '#8b5cf6',
-                'Credit Card': '#f59e0b',
-                'Other': '#6b7280'
-            };
-            Object.keys(breakdown).forEach(key => {
-                const color = sourceColors[key] || '#6b7280';
-                breakdownHtml += `<span style="background:${color}20;color:${color};border:1px solid ${color}40;">${key}: ₹${breakdown[key].toFixed(2)}</span>`;
-            });
-            if (breakdownHtml) {
-                breakdownHtml += `<span class="total">Total: ₹${total.toFixed(2)}</span>`;
-            } else {
-                breakdownHtml = '<span style="color:#94a3b8;">No expenses in this period</span>';
-            }
-            sourceBreakdownEl.innerHTML = breakdownHtml;
+            // Update source breakdown (respects category filter)
+            updateSourceBreakdown(filtered);
 
             // Expense list - sorted with newest first
             if (filtered.length === 0) {
@@ -814,14 +946,13 @@
             totalDisplay.textContent = `Total: ₹${total.toFixed(2)}`;
             entryCount.textContent = `${filtered.length} entries`;
             updateDoughnutChart(filtered);
-            updateFileInfo();
+            renderCategoryFilters();
         } catch (e) {
             console.error('Render error:', e);
             showError('Error rendering: ' + e.message);
         }
     }
 
-    // ===== UPDATE FILE INFO - FIXED =====
     function updateFileInfo() {
         const infoEl = document.getElementById('fileInfo');
         const total = expenses.reduce((s, e) => s + e.amount, 0);
@@ -854,6 +985,7 @@
         `).join('');
         srcCount.textContent = sources.length;
 
+        // Save category events
         document.querySelectorAll('.save-cat-btn').forEach(b => {
             b.addEventListener('click', function() {
                 const idx = parseInt(this.dataset.index);
@@ -867,9 +999,7 @@
                     populateSelects();
                     renderSettings();
                     render();
-                } else if (newVal === categories[idx]) {
-                    // no change
-                } else {
+                } else if (newVal !== categories[idx]) {
                     alert('Invalid or duplicate category name.');
                 }
             });
@@ -883,7 +1013,7 @@
                     if (!confirm(`"${cat}" is used in expenses. Delete anyway?`)) return;
                 }
                 categories.splice(idx, 1);
-                const fallback = categories.length > 0 ? categories[0] : 'Uncategorized';
+                const fallback = categories[0] || 'Uncategorized';
                 expenses.forEach(e => { if (e.category === cat) e.category = fallback; });
                 saveAll();
                 populateSelects();
@@ -905,9 +1035,7 @@
                     populateSelects();
                     renderSettings();
                     render();
-                } else if (newVal === sources[idx]) {
-                    // no change
-                } else {
+                } else if (newVal !== sources[idx]) {
                     alert('Invalid or duplicate source name.');
                 }
             });
@@ -921,7 +1049,7 @@
                     if (!confirm(`"${src}" is used in expenses. Delete anyway?`)) return;
                 }
                 sources.splice(idx, 1);
-                const fallback = sources.length > 0 ? sources[0] : 'Uncategorized';
+                const fallback = sources[0] || 'Uncategorized';
                 expenses.forEach(e => { if (e.source === src) e.source = fallback; });
                 saveAll();
                 populateSelects();
@@ -937,6 +1065,7 @@
         if (categories.includes(name)) return alert('Category already exists.');
         categories.push(name);
         newCategoryInput.value = '';
+        selectedCategories.push(name);
         saveAll();
         populateSelects();
         renderSettings();
@@ -955,7 +1084,13 @@
         render();
     }
 
-    // ===== FILTER ACTIONS =====
+    function toggleSettings() {
+        settingsPanel.classList.toggle('hidden');
+        if (!settingsPanel.classList.contains('hidden')) {
+            renderSettings();
+        }
+    }
+
     function applyFilter() { render(); }
 
     function resetFilter() {
@@ -967,24 +1102,10 @@
         render();
     }
 
-    function toggleSettings() {
-        settingsPanel.classList.toggle('hidden');
-        if (!settingsPanel.classList.contains('hidden')) {
-            renderSettings();
-        }
-    }
-
     // ===== EXPORT/IMPORT =====
     function exportToFile() {
         try {
-            // Create clean data object with only what's needed
-            const data = {
-                version: currentDataVersion,
-                exportedAt: new Date().toISOString(),
-                expenses: expenses, // Direct array
-                categories: categories,
-                sources: sources
-            };
+            const data = getDataObject();
             const json = JSON.stringify(data, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -1051,6 +1172,10 @@
             if (!Array.isArray(sources) || sources.length === 0) {
                 sources = ['Cash', 'Bank', 'UPI', 'Credit Card', 'Other'];
             }
+            
+            // Initialize selected categories
+            selectedCategories = [...categories];
+            
             populateSelects();
             setDateToToday();
             
@@ -1063,6 +1188,9 @@
             // Set default chart range
             document.querySelector('.chart-controls .btn[data-range="day"]')?.classList.add('active');
             chartRange = 'day';
+            
+            // Show category filter by default
+            document.getElementById('categoryFilterContainer').style.display = 'block';
             
             render();
 
