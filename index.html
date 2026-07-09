@@ -125,6 +125,10 @@
         /* Checkbox Filter */
         .filter-container{background:#f8fafc;border-radius:16px;padding:12px 14px;margin-bottom:12px;border:1px solid #eef2f6;display:none}
         .filter-container .title{font-size:.75rem;font-weight:600;color:#334155;text-transform:uppercase;margin-bottom:8px}
+        .filter-group-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+        .filter-group-actions{display:flex;gap:10px}
+        .filter-action-link{font-size:.7rem;font-weight:600;color:#3b82f6;cursor:pointer;user-select:none}
+        .filter-action-link:active{opacity:.6}
         .filter-grid{display:flex;flex-wrap:wrap;gap:6px}
         .filter-item{display:flex;align-items:center;gap:6px;padding:4px 10px 4px 6px;border-radius:30px;border:2px solid #dce2ec;background:#fff;cursor:pointer;transition:all .15s;font-size:.75rem;font-weight:500;user-select:none}
         .filter-item:active{transform:scale(.95)}
@@ -196,11 +200,27 @@
             <button class="btn btn-outline" data-range="year">Year</button>
         </div>
         
-        <!-- 3. CHECKBOX FILTER -->
-        <div class="filter-container" id="filterContainer">
-            <div class="title" id="filterTitle">📂 Select categories to include</div>
-            <div class="filter-grid" id="filterGrid"></div>
-            <div class="filter-hint">💡 Click any item to toggle inclusion in the chart</div>
+        <!-- 3. CHECKBOX FILTERS (category + source, independent, both apply together) -->
+        <div class="filter-container" id="filterContainer" style="display:block;">
+            <div class="filter-group-header">
+                <div class="title" style="margin:0;">📂 Categories</div>
+                <div class="filter-group-actions">
+                    <span class="filter-action-link" data-group="category" data-action="all">All</span>
+                    <span class="filter-action-link" data-group="category" data-action="none">None</span>
+                </div>
+            </div>
+            <div class="filter-grid" id="categoryFilterGrid"></div>
+
+            <div class="filter-group-header" style="margin-top:14px;">
+                <div class="title" style="margin:0;">💳 Sources</div>
+                <div class="filter-group-actions">
+                    <span class="filter-action-link" data-group="source" data-action="all">All</span>
+                    <span class="filter-action-link" data-group="source" data-action="none">None</span>
+                </div>
+            </div>
+            <div class="filter-grid" id="sourceFilterGrid"></div>
+
+            <div class="filter-hint">💡 Tap to include/exclude from chart & total — both filters apply together</div>
         </div>
         
         <!-- 4. DATE RANGE SELECTOR -->
@@ -260,7 +280,8 @@
     let editingId = null;
     let chartRange = 'day';
     let breakdownType = 'category';
-    let selectedFilters = [];
+    let selectedCategories = [];
+    let selectedSources = [];
 
     // ===== DOM REFS =====
     const amountInput = document.getElementById('amount');
@@ -305,8 +326,8 @@
     const chartControls = document.querySelectorAll('.chart-controls .btn');
     const breakdownSelect = document.getElementById('breakdownSelect');
     const filterContainer = document.getElementById('filterContainer');
-    const filterGrid = document.getElementById('filterGrid');
-    const filterTitle = document.getElementById('filterTitle');
+    const categoryFilterGrid = document.getElementById('categoryFilterGrid');
+    const sourceFilterGrid = document.getElementById('sourceFilterGrid');
 
     let chart = null;
     const ctx = document.getElementById('expenseChart').getContext('2d');
@@ -349,6 +370,15 @@
         if (!dateStr) return '';
         const dt = parseLocalDate(dateStr);
         return dt.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+    }
+
+    // ===== INDIAN NUMBER FORMATTING (₹1,23,456.00 style) =====
+    function formatINR(amount, decimals = 2) {
+        const num = Number(amount) || 0;
+        return '₹' + num.toLocaleString('en-IN', {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals
+        });
     }
 
     // ===== DATA FUNCTIONS =====
@@ -480,95 +510,138 @@
         renderFilter();
     }
 
-    // ===== CHECKBOX FILTER (FIXED) =====
-    function getFilterItems() {
-        if (breakdownType === 'category') {
-            return categories;
-        } else if (breakdownType === 'source') {
-            return sources;
+    // ===== CHECKBOX FILTERS: category + source, independent, both apply together =====
+    function getDateFilteredExpenses() {
+        try {
+            const from = fromDate.value ? parseLocalDate(fromDate.value) : null;
+            const to = toDate.value ? parseLocalDate(toDate.value) : null;
+            if (from) from.setHours(0, 0, 0, 0);
+            if (to) to.setHours(23, 59, 59, 999);
+
+            return expenses.filter(exp => {
+                const expDate = parseLocalDate(exp.date);
+                expDate.setHours(0, 0, 0, 0);
+                if (from && expDate < from) return false;
+                if (to && expDate > to) return false;
+                return true;
+            });
+        } catch (e) {
+            console.error('Date filter error:', e);
+            return expenses;
         }
-        return [];
     }
 
-    function getFilterColors() {
-        if (breakdownType === 'category') {
-            return categoryColors;
-        } else if (breakdownType === 'source') {
-            return sourceColors;
-        }
-        return {};
+    function syncSelections() {
+        // Cleanup only: drop selections for categories/sources that no longer exist
+        // (deleted or renamed). Newly-added items are handled explicitly wherever
+        // they're created (addCategory/addSource/init), so an intentional
+        // deselection never gets silently re-added here.
+        selectedCategories = selectedCategories.filter(c => categories.includes(c));
+        selectedSources = selectedSources.filter(s => sources.includes(s));
     }
 
     function renderFilter() {
-        const items = getFilterItems();
-        const colors = getFilterColors();
-        const filteredData = getFilteredExpenses();
+        syncSelections();
 
-        if (breakdownType === 'none' || items.length === 0) {
+        if (categories.length === 0 && sources.length === 0) {
             filterContainer.style.display = 'none';
             return;
         }
         filterContainer.style.display = 'block';
 
-        // Initialize selectedFilters - start with ALL selected
-        if (selectedFilters.length === 0) {
-            selectedFilters = [...items];
-        }
-        // Clean up
-        selectedFilters = selectedFilters.filter(f => items.includes(f));
-        items.forEach(item => {
-            if (!selectedFilters.includes(item)) {
-                selectedFilters.push(item);
-            }
+        const dateFiltered = getDateFilteredExpenses();
+
+        // Category chip counts reflect current SOURCE selection (so counts live-update as sources toggle)
+        const catCounts = {};
+        dateFiltered.filter(exp => selectedSources.includes(exp.source)).forEach(exp => {
+            catCounts[exp.category] = (catCounts[exp.category] || 0) + exp.amount;
         });
 
-        filterTitle.textContent = breakdownType === 'category' ? '📂 Select categories to include' : '💰 Select sources to include';
-
-        // Count amounts
-        const counts = {};
-        filteredData.forEach(exp => {
-            const key = breakdownType === 'category' ? exp.category : exp.source;
-            counts[key] = (counts[key] || 0) + exp.amount;
-        });
-
-        let html = '';
-        items.forEach(item => {
-            const isActive = selectedFilters.includes(item);
-            const color = colors[item] || '#6b7280';
-            const count = counts[item] || 0;
+        let catHtml = '';
+        categories.forEach(item => {
+            const isActive = selectedCategories.includes(item);
+            const color = categoryColors[item] || '#6b7280';
+            const count = catCounts[item] || 0;
             const bgColor = color + '15';
-            const activeClass = isActive ? 'active' : '';
-            html += `
-                <div class="filter-item ${activeClass}" 
+            catHtml += `
+                <div class="filter-item ${isActive ? 'active' : ''}" 
                      data-item="${item}" 
                      style="--item-color:${color};--item-bg:${bgColor};${isActive ? `border-color:${color};background:${bgColor};` : ''}"
-                     onclick="window.toggleFilterItem('${item}')">
+                     onclick="window.toggleFilterItem('category','${item}')">
                     <span class="color-dot" style="background:${color}"></span>
                     <span class="label">${item}</span>
-                    <span class="count">₹${count.toFixed(0)}</span>
+                    <span class="count">${formatINR(count, 0)}</span>
                     <span class="check-mark">✓</span>
                 </div>
             `;
         });
-        filterGrid.innerHTML = html;
+        categoryFilterGrid.innerHTML = catHtml;
+
+        // Source chip counts reflect current CATEGORY selection
+        const srcCounts = {};
+        dateFiltered.filter(exp => selectedCategories.includes(exp.category)).forEach(exp => {
+            srcCounts[exp.source] = (srcCounts[exp.source] || 0) + exp.amount;
+        });
+
+        let srcHtml = '';
+        sources.forEach(item => {
+            const isActive = selectedSources.includes(item);
+            const color = sourceColors[item] || '#6b7280';
+            const count = srcCounts[item] || 0;
+            const bgColor = color + '15';
+            srcHtml += `
+                <div class="filter-item ${isActive ? 'active' : ''}" 
+                     data-item="${item}" 
+                     style="--item-color:${color};--item-bg:${bgColor};${isActive ? `border-color:${color};background:${bgColor};` : ''}"
+                     onclick="window.toggleFilterItem('source','${item}')">
+                    <span class="color-dot" style="background:${color}"></span>
+                    <span class="label">${item}</span>
+                    <span class="count">${formatINR(count, 0)}</span>
+                    <span class="check-mark">✓</span>
+                </div>
+            `;
+        });
+        sourceFilterGrid.innerHTML = srcHtml;
+    }
+
+    function refreshChartAndTotals() {
+        const filtered = getFilteredExpenses();
+        updateDoughnutChart(filtered);
+        updateSourceBreakdown(filtered);
+        const total = filtered.reduce((s, e) => s + e.amount, 0);
+        totalDisplay.textContent = `Total: ${formatINR(total)}`;
+        entryCount.textContent = `${filtered.length} entries`;
     }
 
     // Global toggle function for inline onclick
-    window.toggleFilterItem = function(item) {
-        const index = selectedFilters.indexOf(item);
-        if (index > -1) {
-            selectedFilters.splice(index, 1);
+    window.toggleFilterItem = function(group, item) {
+        if (group === 'category') {
+            const index = selectedCategories.indexOf(item);
+            if (index > -1) selectedCategories.splice(index, 1);
+            else selectedCategories.push(item);
         } else {
-            selectedFilters.push(item);
-        }
-        // If NO items selected, select ALL (so chart doesn't go empty)
-        if (selectedFilters.length === 0) {
-            selectedFilters = [...getFilterItems()];
+            const index = selectedSources.indexOf(item);
+            if (index > -1) selectedSources.splice(index, 1);
+            else selectedSources.push(item);
         }
         renderFilter();
-        updateDoughnutChart(getFilteredExpenses());
-        updateSourceBreakdown(getFilteredExpenses());
+        refreshChartAndTotals();
     };
+
+    // Select All / None per group
+    document.addEventListener('click', function(e) {
+        const link = e.target.closest('.filter-action-link');
+        if (!link) return;
+        const group = link.dataset.group;
+        const action = link.dataset.action;
+        if (group === 'category') {
+            selectedCategories = action === 'all' ? [...categories] : [];
+        } else {
+            selectedSources = action === 'all' ? [...sources] : [];
+        }
+        renderFilter();
+        refreshChartAndTotals();
+    });
 
     // ===== DATE SELECTION =====
     function updateDateDisplay() {
@@ -652,8 +725,8 @@
     // ===== BREAKDOWN SELECT =====
     breakdownSelect.addEventListener('change', function() {
         breakdownType = this.value;
-        selectedFilters = [];
-        renderFilter();
+        // Category/Source inclusion filters are independent of the chart's
+        // grouping mode, so they're left untouched here.
         updateDoughnutChart(getFilteredExpenses());
         updateSourceBreakdown(getFilteredExpenses());
     });
@@ -680,7 +753,7 @@
             descriptionInput.value = '';
             amountInput.focus();
             render();
-            showFileInfo(`✅ Added expense: ₹${newExp.amount} (${newExp.category})`, 'success');
+            showFileInfo(`✅ Added expense: ${formatINR(newExp.amount)} (${newExp.category})`, 'success');
         } catch (e) {
             console.error('Add expense error:', e);
             alert('Error adding expense. Please try again.');
@@ -689,7 +762,7 @@
 
     function deleteExpense(id) {
         const exp = expenses.find(e => e.id === id);
-        if (exp && confirm(`Delete this expense?\n₹${exp.amount.toFixed(2)} - ${exp.category}${exp.description ? `\n"${exp.description}"` : ''}`)) {
+        if (exp && confirm(`Delete this expense?\n${formatINR(exp.amount)} - ${exp.category}${exp.description ? `\n"${exp.description}"` : ''}`)) {
             expenses = expenses.filter(e => e.id !== id);
             saveAll();
             render();
@@ -737,25 +810,14 @@
     function getFilteredExpenses() {
         try {
             // 1. Date range filter
-            const from = fromDate.value ? parseLocalDate(fromDate.value) : null;
-            const to = toDate.value ? parseLocalDate(toDate.value) : null;
-            if (from) from.setHours(0, 0, 0, 0);
-            if (to) to.setHours(23, 59, 59, 999);
+            let result = getDateFilteredExpenses();
 
-            let result = expenses.filter(exp => {
-                const expDate = parseLocalDate(exp.date);
-                expDate.setHours(0, 0, 0, 0);
-                if (from && expDate < from) return false;
-                if (to && expDate > to) return false;
-                return true;
-            });
-
-            // 2. Category/Source filter (based on breakdown type)
-            if (breakdownType === 'category') {
-                result = result.filter(exp => selectedFilters.includes(exp.category));
-            } else if (breakdownType === 'source') {
-                result = result.filter(exp => selectedFilters.includes(exp.source));
-            }
+            // 2. Category AND Source filters apply together, independent of
+            //    which breakdown grouping is currently shown on the chart.
+            result = result.filter(exp =>
+                selectedCategories.includes(exp.category) &&
+                selectedSources.includes(exp.source)
+            );
 
             return result;
         } catch (e) {
@@ -780,10 +842,10 @@
         };
         Object.keys(breakdown).forEach(key => {
             const color = sourceColors[key] || '#6b7280';
-            html += `<span style="background:${color}20;color:${color};border:1px solid ${color}40;">${key}: ₹${breakdown[key].toFixed(2)}</span>`;
+            html += `<span style="background:${color}20;color:${color};border:1px solid ${color}40;">${key}: ${formatINR(breakdown[key])}</span>`;
         });
         if (html) {
-            html += `<span class="total">Total: ₹${total.toFixed(2)}</span>`;
+            html += `<span class="total">Total: ${formatINR(total)}</span>`;
         } else {
             html = '<span style="color:#94a3b8;">No expenses in this period</span>';
         }
@@ -876,7 +938,7 @@
                 beforeDraw: function(chart) {
                     const { width, height, ctx } = chart;
                     ctx.save();
-                    const text = '₹' + total.toFixed(2);
+                    const text = formatINR(total);
                     ctx.font = 'bold 16px system-ui';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
@@ -949,7 +1011,7 @@
                         <div class="expense-item">
                             <div class="expense-row">
                                 <div class="expense-details">
-                                    <span class="expense-amount">₹${exp.amount.toFixed(2)}</span>
+                                    <span class="expense-amount">${formatINR(exp.amount)}</span>
                                     <span class="expense-tag">${exp.category}</span>
                                     <span class="expense-source">${exp.source}</span>
                                     <span class="expense-date">${formatDisplayDate(exp.date)}</span>
@@ -979,7 +1041,7 @@
                 });
             }
 
-            totalDisplay.textContent = `Total: ₹${total.toFixed(2)}`;
+            totalDisplay.textContent = `Total: ${formatINR(total)}`;
             entryCount.textContent = `${filtered.length} entries`;
             updateDoughnutChart(filtered);
             renderFilter();
@@ -992,7 +1054,7 @@
     function updateFileInfo() {
         const infoEl = document.getElementById('fileInfo');
         const total = expenses.reduce((s, e) => s + e.amount, 0);
-        infoEl.textContent = `📊 ${expenses.length} expenses · Total: ₹${total.toFixed(2)} · Export to JSON to use in other apps`;
+        infoEl.textContent = `📊 ${expenses.length} expenses · Total: ${formatINR(total)} · Export to JSON to use in other apps`;
     }
 
     // ===== SETTINGS =====
@@ -1030,6 +1092,8 @@
                     const oldVal = categories[idx];
                     categories[idx] = newVal;
                     expenses.forEach(e => { if (e.category === oldVal) e.category = newVal; });
+                    const selIdx = selectedCategories.indexOf(oldVal);
+                    if (selIdx > -1) selectedCategories[selIdx] = newVal;
                     saveAll();
                     populateSelects();
                     renderSettings();
@@ -1066,6 +1130,8 @@
                     const oldVal = sources[idx];
                     sources[idx] = newVal;
                     expenses.forEach(e => { if (e.source === oldVal) e.source = newVal; });
+                    const selIdx = selectedSources.indexOf(oldVal);
+                    if (selIdx > -1) selectedSources[selIdx] = newVal;
                     saveAll();
                     populateSelects();
                     renderSettings();
@@ -1099,8 +1165,8 @@
         if (!name) return alert('Please enter a category name.');
         if (categories.includes(name)) return alert('Category already exists.');
         categories.push(name);
+        selectedCategories.push(name);
         newCategoryInput.value = '';
-        selectedFilters = [...categories];
         saveAll();
         populateSelects();
         renderSettings();
@@ -1112,8 +1178,8 @@
         if (!name) return alert('Please enter a source name.');
         if (sources.includes(name)) return alert('Source already exists.');
         sources.push(name);
+        selectedSources.push(name);
         newSourceInput.value = '';
-        selectedFilters = [...sources];
         saveAll();
         populateSelects();
         renderSettings();
@@ -1174,6 +1240,8 @@
                 if (confirm(`This will replace ALL current data with ${expCount} expenses. Continue?`)) {
                     const success = loadFromDataObject(data);
                     if (success) {
+                        selectedCategories = [...categories];
+                        selectedSources = [...sources];
                         populateSelects();
                         renderSettings();
                         render();
@@ -1209,7 +1277,8 @@
                 sources = ['Cash', 'Bank', 'UPI', 'Credit Card', 'Other'];
             }
             
-            selectedFilters = [...categories];
+            selectedCategories = [...categories];
+            selectedSources = [...sources];
             populateSelects();
             setDateToToday();
             
