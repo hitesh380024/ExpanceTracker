@@ -1331,9 +1331,10 @@
             
             selectedCategories = [...categories];
             selectedSources = [...sources];
-            populateSelects();
-            setDateToToday();
-            
+
+            // Default filter range: current month — set this first so the very
+            // first render/filter pass already reflects "this month", with the
+            // From/To fields showing it in DD/MM/YYYY.
             const now = new Date();
             const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
             const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -1341,7 +1342,10 @@
             toDate.value = toLocalDateStr(lastDay);
             syncDateDisplay(fromDate, fromDateText);
             syncDateDisplay(toDate, toDateText);
-            
+
+            populateSelects();
+            setDateToToday();
+
             document.querySelector('.chart-controls .btn[data-range="day"]')?.classList.add('active');
             chartRange = 'day';
             updateChartControlsVisibility();
@@ -1362,6 +1366,10 @@
             });
             applyFilterBtn.addEventListener('click', applyFilter);
             resetFilterBtn.addEventListener('click', resetFilter);
+            fromDate.addEventListener('change', () => syncDateDisplay(fromDate, fromDateText));
+            fromDate.addEventListener('input', () => syncDateDisplay(fromDate, fromDateText));
+            toDate.addEventListener('change', () => syncDateDisplay(toDate, toDateText));
+            toDate.addEventListener('input', () => syncDateDisplay(toDate, toDateText));
             toggleBtn.addEventListener('click', toggleSettings);
             addCategoryBtn.addEventListener('click', addCategory);
             addSourceBtn.addEventListener('click', addSource);
