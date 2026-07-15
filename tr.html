@@ -1,0 +1,1719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SpendWise — Expense Tracker</title>
+    <meta name="description" content="Track your personal expenses with categories, backup & restore">
+    <meta name="theme-color" content="#f59e0b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" id="manifest-link">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Nunito:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Lato:wght@400;700&family=Merriweather:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --font-body: 'DM Sans', sans-serif;
+            --font-heading: 'Space Grotesk', sans-serif;
+            --bg: #f4f5fa;
+            --bg-card: #ffffff;
+            --bg-card-hover: #f3f4f9;
+            --bg-input: #f6f7fb;
+            --fg: #1a1d2b;
+            --fg-dim: #64687d;
+            --muted: #9498ad;
+            --accent: #f59e0b;
+            --accent-hover: #d97706;
+            --accent-glow: rgba(245,158,11,0.12)  ;
+            --border: #e7e8f0;
+            --danger: #ef4444;
+            --danger-glow: rgba(239,68,68,0.1);
+            --success: #10b981;
+            --success-glow: rgba(16,185,129,0.1);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font-body); background: var(--bg); color: var(--fg); min-height: 100vh; overflow-x: hidden; }
+        h1,h2,h3,h4,h5 { font-family: var(--font-heading); }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+        /* Background blobs */
+        .blob { position: fixed; border-radius: 50%; filter: blur(120px); opacity: 0.5; pointer-events: none; z-index: 0; }
+        .blob-1 { width: 500px; height: 500px; background: rgba(245,158,11,0.10); top: -150px; right: -100px; animation: blobFloat1 20s ease-in-out infinite; }
+        .blob-2 { width: 400px; height: 400px; background: rgba(59,130,246,0.07); bottom: -100px; left: -100px; animation: blobFloat2 25s ease-in-out infinite; }
+        @keyframes blobFloat1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-60px,80px)} }
+        @keyframes blobFloat2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(50px,-60px)} }
+
+        /* Sidebar */
+        #sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 240px; background: rgba(255,255,255,0.85); backdrop-filter: blur(20px); border-right: 1px solid var(--border); z-index: 40; display: flex; flex-direction: column; transition: transform 0.3s ease; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 11px 20px; margin: 2px 12px; border-radius: 10px; color: var(--fg-dim); cursor: pointer; transition: all 0.2s ease; font-size: 14px; font-weight: 500; }
+        .nav-item:hover { background: var(--bg-card-hover); color: var(--fg); }
+        .nav-item.active { background: var(--accent-glow); color: var(--accent); }
+        .nav-item.active i { color: var(--accent); }
+        .nav-item i { width: 20px; text-align: center; font-size: 15px; }
+        .add-btn-sidebar { margin: 16px 16px 8px; padding: 12px; background: var(--accent); color: #000; border: none; border-radius: 10px; font-family: var(--font-heading); font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s ease; }
+        .add-btn-sidebar:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(245,158,11,0.3); }
+
+        /* Main content */
+        #app { margin-left: 240px; min-height: 100vh; position: relative; z-index: 1; padding: 32px; }
+        .page-enter { animation: pageIn 0.35s ease-out; }
+        @keyframes pageIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Cards */
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; transition: all 0.25s ease; }
+        .card:hover { border-color: rgba(245,158,11,0.2); }
+        .stat-card { position: relative; overflow: hidden; }
+        .stat-card::after { content: ''; position: absolute; top: -30px; right: -30px; width: 80px; height: 80px; border-radius: 50%; opacity: 0.06; }
+        .stat-card.amber::after { background: var(--accent); }
+        .stat-card.red::after { background: var(--danger); }
+        .stat-card.green::after { background: var(--success); }
+        .stat-card.blue::after { background: #3b82f6; }
+
+        /* Inputs */
+        .input-field { width: 100%; padding: 12px 16px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px; color: var(--fg); font-family: var(--font-body); font-size: 14px; outline: none; transition: border-color 0.2s ease; }
+        .input-field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .input-field::placeholder { color: var(--muted); }
+        .amount-input { font-family: var(--font-heading); font-size: 48px; font-weight: 700; text-align: center; background: transparent; border: none; color: var(--fg); outline: none; width: 100%; }
+        .amount-input::placeholder { color: var(--muted); }
+
+        /* Category grid */
+        .cat-grid-item { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 8px; border-radius: 12px; border: 2px solid transparent; cursor: pointer; transition: all 0.2s ease; background: var(--bg-input); }
+        .cat-grid-item:hover { background: var(--bg-card-hover); transform: translateY(-2px); }
+        .cat-grid-item.selected { border-color: var(--accent); background: var(--accent-glow); transform: scale(1.02); }
+        .cat-grid-item .cat-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .cat-grid-item .cat-name { font-size: 11px; color: var(--fg-dim); text-align: center; line-height: 1.2; }
+
+        /* Transaction item */
+        .tx-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 12px; transition: background 0.2s ease; cursor: pointer; }
+        .tx-item:hover { background: var(--bg-card-hover); }
+        .tx-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+
+        /* Bottom nav */
+        #bottom-nav { display: none; position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,0.92); backdrop-filter: blur(20px); border-top: 1px solid var(--border); z-index: 40; padding: 6px 0 env(safe-area-inset-bottom, 8px); }
+        .bnav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px; color: var(--muted); cursor: pointer; transition: color 0.2s; font-size: 10px; flex: 1; }
+        .bnav-item i { font-size: 18px; }
+        .bnav-item.active { color: var(--accent); }
+        .bnav-center { position: relative; top: -16px; }
+        .bnav-center-btn { width: 50px; height: 50px; border-radius: 16px; background: var(--accent); color: #000; border: none; font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(245,158,11,0.35); transition: all 0.2s; }
+        .bnav-center-btn:hover { transform: scale(1.08); }
+
+        /* FAB */
+        #fab { display: none; position: fixed; bottom: 90px; right: 20px; width: 56px; height: 56px; border-radius: 18px; background: var(--accent); color: #000; border: none; font-size: 24px; cursor: pointer; z-index: 35; box-shadow: 0 4px 24px rgba(245,158,11,0.4); transition: all 0.25s; }
+        #fab:hover { transform: scale(1.1) rotate(90deg); }
+
+        /* Modal */
+        #modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 100; display: none; align-items: center; justify-content: center; padding: 20px; }
+        #modal-overlay.show { display: flex; }
+        #modal-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: 18px; padding: 28px; max-width: 480px; width: 100%; max-height: 85vh; overflow-y: auto; animation: modalIn 0.3s ease-out; }
+        @keyframes modalIn { from { opacity:0; transform:translateY(20px) scale(0.96); } to { opacity:1; transform:translateY(0) scale(1); } }
+
+        /* Toasts */
+        #toasts { position: fixed; top: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+        .toast { padding: 14px 20px; border-radius: 12px; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 10px; animation: toastIn 0.3s ease-out; min-width: 260px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+        .toast.success { background: #ecfdf5; color: #065f46; border: 1px solid #10b981; }
+        .toast.error { background: #fef2f2; color: #991b1b; border: 1px solid #ef4444; }
+        .toast.info { background: #eff6ff; color: #1e40af; border: 1px solid #3b82f6; }
+        .toast.out { animation: toastOut 0.3s ease-in forwards; }
+        @keyframes toastIn { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
+        @keyframes toastOut { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(40px); } }
+
+        /* Buttons */
+        .btn-primary { padding: 12px 24px; background: var(--accent); color: #000; border: none; border-radius: 10px; font-family: var(--font-heading); font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.2s; }
+        .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,158,11,0.3); }
+        .btn-secondary { padding: 12px 24px; background: var(--bg-card-hover); color: var(--fg); border: 1px solid var(--border); border-radius: 10px; font-family: var(--font-heading); font-weight: 500; font-size: 14px; cursor: pointer; transition: all 0.2s; }
+        .btn-secondary:hover { background: var(--border); }
+        .btn-danger { padding: 12px 24px; background: var(--danger); color: #fff; border: none; border-radius: 10px; font-family: var(--font-heading); font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.2s; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-sm { padding: 8px 14px; font-size: 12px; }
+
+        /* Misc */
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+        .empty-state i { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+        .badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+
+        /* Color picker grid */
+        .color-opt { width: 32px; height: 32px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: all 0.15s; }
+        .color-opt:hover { transform: scale(1.15); }
+        .color-opt.selected { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+
+        /* Icon picker grid */
+        .icon-opt { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid transparent; background: var(--bg-input); color: var(--fg-dim); transition: all 0.15s; }
+        .icon-opt:hover { background: var(--bg-card-hover); color: var(--fg); }
+        .icon-opt.selected { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+
+        /* Date field: DD/MM/YYYY text display with invisible native picker on top */
+        .date-input-wrapper { position: relative; width: 100%; }
+        .date-input-wrapper .input-field { cursor: pointer; }
+        .date-native-overlay { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; margin: 0; padding: 0; cursor: pointer; }
+
+        /* Segmented tab switcher (category/source picker, report breakdowns) */
+        .seg-tabs { display: flex; gap: 4px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px; padding: 4px; }
+        .seg-tab { flex: 1; text-align: center; padding: 8px 10px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--fg-dim); cursor: pointer; transition: all 0.2s ease; user-select: none; }
+        .seg-tab.active { background: var(--bg-card); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
+        /* Filter chips (Reports page category/source toggles) */
+        .filter-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px 6px 8px; border-radius: 30px; border: 2px solid var(--border); background: var(--bg-card); cursor: pointer; transition: all 0.15s ease; font-size: 12px; font-weight: 500; color: var(--fg-dim); user-select: none; }
+        .filter-chip .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .filter-chip.active { border-color: var(--chip-color, var(--accent)); background: var(--chip-bg, var(--accent-glow)); color: var(--chip-color, var(--accent)); }
+        .filter-link { font-size: 11px; font-weight: 600; color: var(--accent); cursor: pointer; user-select: none; }
+
+        @media (max-width: 768px) {
+            #sidebar { transform: translateX(-100%); }
+            #sidebar.open { transform: translateX(0); }
+            #app { margin-left: 0; padding: 20px 16px 100px; }
+            #bottom-nav { display: flex; }
+            #fab { display: flex; align-items: center; justify-content: center; }
+            .amount-input { font-size: 36px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Background blobs -->
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+
+    <!-- Sidebar -->
+    <aside id="sidebar">
+        <div style="padding:24px 20px 20px">
+            <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:36px;height:36px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;color:#000;font-family:var(--font-heading)">$</div>
+                <div>
+                    <h1 style="font-size:18px;font-weight:700;line-height:1.1">SpendWise</h1>
+                    <span style="font-size:11px;color:var(--muted)">Expense Tracker</span>
+                </div>
+            </div>
+        </div>
+        <button class="add-btn-sidebar" onclick="navigate('add')"><i class="fa-solid fa-plus"></i> Add Expense</button>
+        <nav style="flex:1;padding:8px 0;overflow-y:auto" id="sidebar-nav">
+            <div class="nav-item active" data-view="dashboard"><i class="fa-solid fa-chart-pie"></i> Dashboard</div>
+            <div class="nav-item" data-view="transactions"><i class="fa-solid fa-receipt"></i> Transactions</div>
+            <div class="nav-item" data-view="reports"><i class="fa-solid fa-chart-line"></i> Reports</div>
+            <div class="nav-item" data-view="categories"><i class="fa-solid fa-tags"></i> Categories & Sources</div>
+            <div class="nav-item" data-view="backup"><i class="fa-solid fa-shield-halved"></i> Backup & Restore</div>
+        </nav>
+        <div style="padding:16px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)" id="sidebar-footer">v2.0.0</div>
+    </aside>
+
+    <!-- Main content area -->
+    <main id="app"></main>
+
+    <!-- Bottom navigation (mobile) -->
+    <nav id="bottom-nav">
+        <div class="bnav-item active" data-view="dashboard"><i class="fa-solid fa-chart-pie"></i><span>Home</span></div>
+        <div class="bnav-item" data-view="transactions"><i class="fa-solid fa-receipt"></i><span>History</span></div>
+        <div class="bnav-item bnav-center"><button class="bnav-center-btn" onclick="navigate('add')" aria-label="Add expense"><i class="fa-solid fa-plus"></i></button></div>
+        <div class="bnav-item" data-view="reports"><i class="fa-solid fa-chart-line"></i><span>Reports</span></div>
+        <div class="bnav-item" data-view="categories"><i class="fa-solid fa-tags"></i><span>Categories</span></div>
+        <div class="bnav-item" data-view="backup"><i class="fa-solid fa-shield-halved"></i><span>Backup</span></div>
+    </nav>
+
+    <!-- Modal overlay -->
+    <div id="modal-overlay" role="dialog" aria-modal="true">
+        <div id="modal-box"></div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toasts" aria-live="polite"></div>
+
+    <!-- Mobile FAB -->
+    <button id="fab" onclick="navigate('add')" aria-label="Add expense"><i class="fa-solid fa-plus"></i></button>
+
+    <!-- Hidden file input for restore -->
+    <input type="file" id="restore-input" accept=".json" style="display:none">
+
+<script>
+/* ============================================
+   CONSTANTS & DEFAULT DATA
+   ============================================ */
+const STORAGE_KEY = 'spendwise_data';
+const DEFAULT_CATEGORIES = [
+    { id: 'c1', name: 'Food & Dining', icon: 'fa-utensils', color: '#f59e0b' },
+    { id: 'c2', name: 'Transportation', icon: 'fa-car', color: '#3b82f6' },
+    { id: 'c3', name: 'Shopping', icon: 'fa-bag-shopping', color: '#ec4899' },
+    { id: 'c4', name: 'Entertainment', icon: 'fa-film', color: '#8b5cf6' },
+    { id: 'c5', name: 'Bills & Utilities', icon: 'fa-bolt', color: '#ef4444' },
+    { id: 'c6', name: 'Health', icon: 'fa-heart-pulse', color: '#10b981' },
+    { id: 'c7', name: 'Education', icon: 'fa-graduation-cap', color: '#06b6d4' },
+    { id: 'c8', name: 'Travel', icon: 'fa-plane', color: '#f97316' },
+    { id: 'c9', name: 'Groceries', icon: 'fa-cart-shopping', color: '#84cc16' },
+    { id: 'c10', name: 'Other', icon: 'fa-ellipsis', color: '#6b7280' }
+];
+const ICON_OPTIONS = [
+    'fa-utensils','fa-car','fa-bag-shopping','fa-film','fa-bolt','fa-heart-pulse',
+    'fa-graduation-cap','fa-plane','fa-cart-shopping','fa-ellipsis','fa-music',
+    'fa-gamepad','fa-gift','fa-home','fa-dumbbell','fa-book','fa-mug-hot',
+    'fa-shirt','fa-baby','fa-scissors','fa-wrench','fa-paintbrush','fa-camera',
+    'fa-bicycle','fa-microphone','fa-guitar','fa-pizza-slice','fa-ice-cream',
+    'fa-martini-glass','fa-bread-slice','fa-egg','fa-apple-whole','fa-fish',
+    'fa-trophy','fa-dice','fa-chess','fa-puzzle-piece','fa-palette','fa-dog',
+    'fa-cat','fa-phone','fa-laptop','fa-tv','fa-wifi','fa-gas-pump','fa-bed'
+];
+const COLOR_OPTIONS = ['#f59e0b','#ef4444','#ec4899','#8b5cf6','#3b82f6','#06b6d4','#10b981','#84cc16','#f97316','#6b7280','#14b8a6','#e11d48'];
+const DEFAULT_SOURCES = [
+    { id: 's1', name: 'Cash', icon: 'fa-money-bill-wave', color: '#10b981' },
+    { id: 's2', name: 'Bank', icon: 'fa-building-columns', color: '#3b82f6' },
+    { id: 's3', name: 'UPI', icon: 'fa-mobile-screen-button', color: '#8b5cf6' },
+    { id: 's4', name: 'Credit Card', icon: 'fa-credit-card', color: '#f59e0b' },
+    { id: 's5', name: 'Other', icon: 'fa-wallet', color: '#6b7280' }
+];
+const FONT_OPTIONS = [
+    { name: 'DM Sans (Default)', body: "'DM Sans', sans-serif", heading: "'Space Grotesk', sans-serif" },
+    { name: 'Inter', body: "'Inter', sans-serif", heading: "'Inter', sans-serif" },
+    { name: 'Poppins', body: "'Poppins', sans-serif", heading: "'Poppins', sans-serif" },
+    { name: 'Nunito', body: "'Nunito', sans-serif", heading: "'Nunito', sans-serif" },
+    { name: 'Montserrat', body: "'Montserrat', sans-serif", heading: "'Montserrat', sans-serif" },
+    { name: 'Lato', body: "'Lato', sans-serif", heading: "'Lato', sans-serif" },
+    { name: 'Merriweather (Serif)', body: "'Merriweather', serif", heading: "'Merriweather', serif" },
+    { name: 'System Default', body: "system-ui, -apple-system, sans-serif", heading: "system-ui, -apple-system, sans-serif" }
+];
+const CURRENCIES = [
+    { symbol: '$', name: 'USD' }, { symbol: '€', name: 'EUR' }, { symbol: '£', name: 'GBP' },
+    { symbol: '¥', name: 'JPY' }, { symbol: '₹', name: 'INR' }, { symbol: '₩', name: 'KRW' },
+    { symbol: '₽', name: 'RUB' }, { symbol: '₺', name: 'TRY' }, { symbol: 'R$', name: 'BRL' },
+    { symbol: 'kr', name: 'SEK' }, { symbol: '₴', name: 'UAH' }, { symbol: 'A$', name: 'AUD' }
+];
+
+/* ============================================
+   STATE MANAGEMENT
+   ============================================ */
+let state = { expenses: [], categories: [], sources: [], currency: '$', lastBackup: null, fontIndex: 0 };
+let currentView = 'dashboard';
+let chartCategory = null;
+let chartTrend = null;
+let chartReport = null;
+let deferredPrompt = null;
+// Reports page filter state (not persisted)
+let reportState = { breakdown: 'category', range: 'day', selectedCats: null, selectedSrcs: null, fromDate: '', toDate: '' };
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) { console.warn('Save failed', e); }
+}
+
+function load() {
+    try {
+        const d = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (d && d.categories && d.categories.length) {
+            state = { ...state, ...d };
+            if (!state.sources || !state.sources.length) state.sources = JSON.parse(JSON.stringify(DEFAULT_SOURCES));
+        } else {
+            state.categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+            state.sources = JSON.parse(JSON.stringify(DEFAULT_SOURCES));
+            generateSampleData();
+            save();
+        }
+    } catch(e) {
+        state.categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+        state.sources = JSON.parse(JSON.stringify(DEFAULT_SOURCES));
+        generateSampleData();
+        save();
+    }
+    if (typeof state.fontIndex !== 'number' || !FONT_OPTIONS[state.fontIndex]) state.fontIndex = 0;
+    applyFont();
+}
+
+function applyFont() {
+    const f = FONT_OPTIONS[state.fontIndex] || FONT_OPTIONS[0];
+    document.documentElement.style.setProperty('--font-body', f.body);
+    document.documentElement.style.setProperty('--font-heading', f.heading);
+}
+
+function currentChartFontFamily() {
+    const f = FONT_OPTIONS[state.fontIndex] || FONT_OPTIONS[0];
+    return f.body.split(',')[0].replace(/'/g, '');
+}
+
+function generateSampleData() {
+    const notes = {
+        c1: ['Lunch at bistro','Coffee & pastry','Dinner takeout','Smoothie bar','Sushi night','Breakfast bagel'],
+        c2: ['Uber ride','Gas station','Bus pass','Parking fee','Toll road','Metro card'],
+        c3: ['New headphones','Winter jacket','Book order','Phone case','Running shoes','Home decor'],
+        c4: ['Movie tickets','Streaming sub','Concert pass','Game purchase','Museum entry','Bowling night'],
+        c5: ['Electric bill','Water bill','Internet bill','Phone plan','Gas bill','Insurance'],
+        c6: ['Gym membership','Pharmacy','Doctor visit','Vitamins','Dental checkup','Eye exam'],
+        c7: ['Online course','Textbook','Workshop fee','Certification','Study materials','Tutoring'],
+        c8: ['Flight ticket','Hotel stay','Travel insurance','Souvenirs','Luggage','Rental car'],
+        c9: ['Weekly groceries','Fruits & veggies','Snacks','Dairy & eggs','Meat & fish','Bread & cereal'],
+        c10: ['Miscellaneous','Subscription','Donation','Pet supplies','Laundry','Dry cleaning']
+    };
+    const amounts = { c1:[8,35], c2:[5,60], c3:[15,200], c4:[10,50], c5:[40,150], c6:[10,80], c7:[10,100], c8:[30,300], c9:[20,90], c10:[5,50] };
+    const now = Date.now();
+    const dayMs = 86400000;
+    const srcPool = (state.sources && state.sources.length) ? state.sources : DEFAULT_SOURCES;
+    for (let i = 0; i < 25; i++) {
+        const catId = DEFAULT_CATEGORIES[Math.floor(Math.random() * DEFAULT_CATEGORIES.length)].id;
+        const range = amounts[catId];
+        const amt = Math.round((range[0] + Math.random() * (range[1] - range[0])) * 100) / 100;
+        const noteArr = notes[catId];
+        state.expenses.push({
+            id: uid(),
+            amount: amt,
+            categoryId: catId,
+            sourceId: srcPool[Math.floor(Math.random() * srcPool.length)].id,
+            note: noteArr[Math.floor(Math.random() * noteArr.length)],
+            date: new Date(now - Math.floor(Math.random() * 30) * dayMs).toISOString().split('T')[0],
+            createdAt: now - Math.floor(Math.random() * 30) * dayMs
+        });
+    }
+    state.expenses.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+function getCat(id) { return state.categories.find(c => c.id === id) || { name: 'Unknown', icon: 'fa-question', color: '#6b7280' }; }
+function getSrc(id) { return state.sources.find(s => s.id === id) || { name: 'Unspecified', icon: 'fa-wallet', color: '#6b7280' }; }
+function fmt(n) { return state.currency + n.toFixed(2); }
+// DD/MM/YYYY throughout the app
+function fmtDate(d) { const dt = new Date(d + 'T00:00:00'); return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`; }
+function fmtDateFull(d) { const dt = new Date(d + 'T00:00:00'); return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`; }
+// ISO (yyyy-mm-dd, what <input type=date> uses) -> DD/MM/YYYY display string
+function isoToDisplay(iso) { if (!iso) return ''; const p = iso.split('-'); if (p.length !== 3) return ''; return `${p[2]}/${p[1]}/${p[0]}`; }
+// Wire a text-display + native date input pair: clicking/typing the text opens the native
+// picker, and the text always mirrors the native value in DD/MM/YYYY (fixes the classic bug
+// where the visible field doesn't refresh after picking a date from the calendar).
+function wireDateField(nativeId, textId) {
+    const native = document.getElementById(nativeId);
+    const text = document.getElementById(textId);
+    if (!native || !text) return;
+    const sync = () => { text.value = isoToDisplay(native.value); };
+    sync();
+    native.addEventListener('input', sync);
+    native.addEventListener('change', sync);
+}
+function dateFieldHTML(nativeId, textId, value, extraClass) {
+    return `<div class="date-input-wrapper ${extraClass || ''}">
+        <input type="text" id="${textId}" class="input-field" placeholder="DD/MM/YYYY" value="${isoToDisplay(value)}" readonly>
+        <input type="date" id="${nativeId}" class="date-native-overlay" value="${value || ''}">
+    </div>`;
+}
+function monthExpenses() {
+    const now = new Date(); const y = now.getFullYear(); const m = now.getMonth();
+    return state.expenses.filter(e => { const d = new Date(e.date + 'T00:00:00'); return d.getFullYear() === y && d.getMonth() === m; });
+}
+
+/* ============================================
+   TOAST SYSTEM
+   ============================================ */
+function toast(msg, type = 'success') {
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    const icons = { success: 'fa-check-circle', error: 'fa-exclamation-circle', info: 'fa-info-circle' };
+    el.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span>${msg}</span>`;
+    document.getElementById('toasts').appendChild(el);
+    setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 300); }, 3000);
+}
+
+/* ============================================
+   MODAL SYSTEM
+   ============================================ */
+function openModal(html) {
+    document.getElementById('modal-box').innerHTML = html;
+    document.getElementById('modal-overlay').classList.add('show');
+}
+function closeModal() { document.getElementById('modal-overlay').classList.remove('show'); }
+document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+
+/* ============================================
+   NAVIGATION
+   ============================================ */
+function navigate(view) {
+    currentView = view;
+    // Update sidebar nav
+    document.querySelectorAll('#sidebar-nav .nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === view));
+    // Update bottom nav
+    document.querySelectorAll('#bottom-nav .bnav-item').forEach(n => n.classList.toggle('active', n.dataset.view === view));
+    // Close sidebar on mobile
+    document.getElementById('sidebar').classList.remove('open');
+    // Render view
+    destroyCharts();
+    const app = document.getElementById('app');
+    app.innerHTML = '';
+    app.className = 'page-enter';
+    switch(view) {
+        case 'dashboard': renderDashboard(); break;
+        case 'add': renderAddExpense(); break;
+        case 'transactions': renderTransactions(); break;
+        case 'reports': renderReports(); break;
+        case 'categories': renderCategories(); break;
+        case 'backup': renderBackup(); break;
+    }
+}
+
+// Nav click handlers
+document.querySelectorAll('[data-view]').forEach(el => {
+    el.addEventListener('click', () => navigate(el.dataset.view));
+});
+
+/* ============================================
+   CHART HELPERS
+   ============================================ */
+function destroyCharts() {
+    if (chartCategory) { chartCategory.destroy(); chartCategory = null; }
+    if (chartTrend) { chartTrend.destroy(); chartTrend = null; }
+    if (chartReport) { chartReport.destroy(); chartReport = null; }
+}
+
+function getChartDefaults() {
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#64687d', font: { family: currentChartFontFamily(), size: 12 }, padding: 16, usePointStyle: true, pointStyleWidth: 10 } } }
+    };
+}
+
+/* ============================================
+   RENDER: DASHBOARD
+   ============================================ */
+function renderDashboard() {
+    const app = document.getElementById('app');
+    const me = monthExpenses();
+    const total = me.reduce((s, e) => s + e.amount, 0);
+    const count = me.length;
+    const avg = count ? total / new Date().getDate() : 0;
+
+    // Top category
+    const catTotals = {};
+    me.forEach(e => { catTotals[e.categoryId] = (catTotals[e.categoryId] || 0) + e.amount; });
+    let topCat = null; let topAmt = 0;
+    Object.entries(catTotals).forEach(([id, amt]) => { if (amt > topAmt) { topAmt = amt; topCat = id; } });
+    const topCatObj = topCat ? getCat(topCat) : null;
+
+    // Last month comparison
+    const now = new Date(); const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lmExpenses = state.expenses.filter(e => { const d = new Date(e.date + 'T00:00:00'); return d.getFullYear() === lm.getFullYear() && d.getMonth() === lm.getMonth(); });
+    const lmTotal = lmExpenses.reduce((s, e) => s + e.amount, 0);
+    const diff = lmTotal ? ((total - lmTotal) / lmTotal * 100) : 0;
+
+    app.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px">
+            <div>
+                <h2 style="font-size:26px;font-weight:700">Dashboard</h2>
+                <p style="color:var(--muted);font-size:13px;margin-top:2px">${now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+            </div>
+            <button class="btn-primary btn-sm" onclick="navigate('add')"><i class="fa-solid fa-plus" style="margin-right:6px"></i>Add Expense</button>
+        </div>
+
+        <!-- Stat Cards -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:28px">
+            <div class="card stat-card amber">
+                <p style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">This Month</p>
+                <p style="font-size:28px;font-weight:700;font-family:var(--font-heading)" class="count-up" data-target="${total}">${fmt(total)}</p>
+                ${diff ? `<p style="font-size:11px;margin-top:6px;color:${diff > 0 ? 'var(--danger)' : 'var(--success)'}"><i class="fa-solid fa-arrow-${diff > 0 ? 'up' : 'down'}" style="margin-right:4px"></i>${Math.abs(diff).toFixed(1)}% vs last month</p>` : ''}
+            </div>
+            <div class="card stat-card blue">
+                <p style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Transactions</p>
+                <p style="font-size:28px;font-weight:700;font-family:var(--font-heading)">${count}</p>
+                <p style="font-size:11px;margin-top:6px;color:var(--fg-dim)">${count ? fmt(total / count) + ' average' : 'No data'}</p>
+            </div>
+            <div class="card stat-card green">
+                <p style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Daily Average</p>
+                <p style="font-size:28px;font-weight:700;font-family:var(--font-heading)">${fmt(avg)}</p>
+                <p style="font-size:11px;margin-top:6px;color:var(--fg-dim)">${new Date().getDate()} days so far</p>
+            </div>
+            <div class="card stat-card red">
+                <p style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Top Category</p>
+                <p style="font-size:20px;font-weight:700;font-family:var(--font-heading);display:flex;align-items:center;gap:8px">
+                    ${topCatObj ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:${topCatObj.color}22;color:${topCatObj.color};font-size:13px"><i class="fa-solid ${topCatObj.icon}"></i></span>${topCatObj.name}` : 'None'}
+                </p>
+                <p style="font-size:11px;margin-top:6px;color:var(--fg-dim)">${topCatObj ? fmt(topAmt) + ' spent' : 'No data'}</p>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:16px;margin-bottom:28px" class="charts-row">
+            <div class="card">
+                <h3 style="font-size:15px;font-weight:600;margin-bottom:16px">By Category</h3>
+                <div style="height:260px;position:relative">${me.length ? '<canvas id="chart-cat"></canvas>' : '<div class="empty-state" style="padding:30px"><i class="fa-solid fa-chart-pie"></i><p>No data this month</p></div>'}</div>
+            </div>
+            <div class="card">
+                <h3 style="font-size:15px;font-weight:600;margin-bottom:16px">Last 7 Days</h3>
+                <div style="height:260px;position:relative">${state.expenses.length ? '<canvas id="chart-trend"></canvas>' : '<div class="empty-state" style="padding:30px"><i class="fa-solid fa-chart-bar"></i><p>No data yet</p></div>'}</div>
+            </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+                <h3 style="font-size:15px;font-weight:600">Recent Transactions</h3>
+                <button style="background:none;border:none;color:var(--accent);font-size:13px;cursor:pointer;font-weight:500" onclick="navigate('transactions')">View All <i class="fa-solid fa-arrow-right" style="margin-left:4px;font-size:11px"></i></button>
+            </div>
+            <div id="recent-list">
+                ${renderTxList(state.expenses.slice(0, 8))}
+                ${!state.expenses.length ? '<div class="empty-state"><i class="fa-solid fa-receipt"></i><p>No transactions yet</p><p style="font-size:12px;margin-top:4px">Tap the + button to add your first expense</p></div>' : ''}
+            </div>
+        </div>
+    `;
+
+    // Responsive charts grid
+    const style = document.createElement('style');
+    style.textContent = '@media(max-width:768px){.charts-row{grid-template-columns:1fr !important}}';
+    app.appendChild(style);
+
+    // Build charts
+    if (me.length) buildCategoryChart(me);
+    if (state.expenses.length) buildTrendChart();
+}
+
+function buildCategoryChart(expenses) {
+    const totals = {};
+    expenses.forEach(e => { totals[e.categoryId] = (totals[e.categoryId] || 0) + e.amount; });
+    const sorted = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+    const labels = sorted.map(([id]) => getCat(id).name);
+    const data = sorted.map(([, v]) => v);
+    const colors = sorted.map(([id]) => getCat(id).color);
+
+    const ctx = document.getElementById('chart-cat');
+    if (!ctx) return;
+    const cd = getChartDefaults();
+    chartCategory = new Chart(ctx, {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0, hoverOffset: 8 }] },
+        options: { ...cd, cutout: '65%', plugins: { ...cd.plugins, legend: { position: 'bottom', labels: { ...cd.plugins.legend.labels, boxWidth: 10, padding: 12, font: { size: 11 } } } } }
+    });
+}
+
+function buildTrendChart() {
+    const days = [];
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date(now); d.setDate(d.getDate() - i);
+        const ds = d.toISOString().split('T')[0];
+        const total = state.expenses.filter(e => e.date === ds).reduce((s, e) => s + e.amount, 0);
+        days.push({ label: d.toLocaleDateString('en-US', { weekday: 'short' }), value: total });
+    }
+    const ctx = document.getElementById('chart-trend');
+    if (!ctx) return;
+    const cd = getChartDefaults();
+    chartTrend = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: days.map(d => d.label),
+            datasets: [{
+                data: days.map(d => d.value),
+                backgroundColor: days.map(d => d.value > 0 ? 'rgba(245,158,11,0.75)' : 'rgba(245,158,11,0.12)'),
+                borderRadius: 6, borderSkipped: false, barPercentage: 0.6
+            }]
+        },
+        options: { ...cd, plugins: { ...cd.plugins, legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: '#9498ad', font: { size: 11 } } }, y: { grid: { color: 'rgba(231,232,240,0.9)' }, ticks: { color: '#9498ad', font: { size: 11 }, callback: v => state.currency + v } } } }
+    });
+}
+
+function renderTxList(expenses) {
+    return expenses.map(e => {
+        const cat = getCat(e.categoryId);
+        const src = e.sourceId ? getSrc(e.sourceId) : null;
+        return `<div class="tx-item" onclick="openEditModal('${e.id}')">
+            <div class="tx-icon" style="background:${cat.color}18;color:${cat.color}"><i class="fa-solid ${cat.icon}"></i></div>
+            <div style="flex:1;min-width:0">
+                <p style="font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.note || cat.name}</p>
+                <p style="font-size:12px;color:var(--muted);margin-top:2px">${fmtDate(e.date)} &middot; ${cat.name}${src ? ' &middot; ' + src.name : ''}</p>
+            </div>
+            <p style="font-size:15px;font-weight:600;font-family:var(--font-heading);color:var(--danger);white-space:nowrap">-${fmt(e.amount)}</p>
+        </div>`;
+    }).join('');
+}
+
+/* ============================================
+   RENDER: ADD EXPENSE
+   ============================================ */
+function renderAddExpense(editId) {
+    const app = document.getElementById('app');
+    const editing = editId ? state.expenses.find(e => e.id === editId) : null;
+    const selectedCat = editing ? editing.categoryId : '';
+    const selectedSrc = editing ? (editing.sourceId || '') : (state.sources[0] ? state.sources[0].id : '');
+    const amount = editing ? editing.amount : '';
+    const note = editing ? (editing.note || '') : '';
+    const date = editing ? editing.date : new Date().toISOString().split('T')[0];
+
+    const catPicked = state.categories.find(c => c.id === selectedCat);
+    const srcPicked = state.sources.find(s => s.id === selectedSrc);
+
+    app.innerHTML = `
+        <div style="max-width:560px;margin:0 auto">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+                <button style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--fg-dim);transition:all 0.2s" onmouseover="this.style.background='var(--bg-card-hover)'" onmouseout="this.style.background='var(--bg-card)'" onclick="navigate('dashboard')"><i class="fa-solid fa-arrow-left"></i></button>
+                <h2 style="font-size:20px;font-weight:700">${editing ? 'Edit Expense' : 'Add Expense'}</h2>
+            </div>
+
+            <!-- Amount -->
+            <div class="card" style="text-align:center;margin-bottom:12px;padding:18px 20px">
+                <div style="display:flex;align-items:baseline;justify-content:center;gap:4px">
+                    <span style="font-size:26px;font-weight:300;color:var(--muted);font-family:var(--font-heading)">${state.currency}</span>
+                    <input type="number" id="exp-amount" class="amount-input" style="font-size:36px" placeholder="0.00" step="0.01" min="0" value="${amount}" inputmode="decimal">
+                </div>
+                <p id="amount-error" style="color:var(--danger);font-size:11px;margin-top:4px;display:none"></p>
+            </div>
+
+            <!-- Category / Source tabbed picker -->
+            <div class="card" style="margin-bottom:12px;padding:14px">
+                <div class="seg-tabs" id="pick-tabs">
+                    <div class="seg-tab active" data-tab="category"><i class="fa-solid fa-tag" style="margin-right:6px;font-size:11px"></i>Category<span style="opacity:0.7;font-weight:500"> — ${catPicked ? catPicked.name : 'none'}</span></div>
+                    <div class="seg-tab" data-tab="source"><i class="fa-solid fa-wallet" style="margin-right:6px;font-size:11px"></i>Source<span style="opacity:0.7;font-weight:500"> — ${srcPicked ? srcPicked.name : 'none'}</span></div>
+                </div>
+                <div style="max-height:172px;overflow-y:auto;margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px" id="cat-grid">
+                    ${state.categories.map(c => `
+                        <div class="cat-grid-item ${selectedCat === c.id ? 'selected' : ''}" data-cat="${c.id}" style="padding:10px 6px">
+                            <div class="cat-icon" style="width:36px;height:36px;font-size:15px;background:${c.color}18;color:${c.color}"><i class="fa-solid ${c.icon}"></i></div>
+                            <span class="cat-name">${c.name}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <div style="max-height:172px;overflow-y:auto;margin-top:12px;display:none;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px" id="src-grid">
+                    ${state.sources.map(s => `
+                        <div class="cat-grid-item ${selectedSrc === s.id ? 'selected' : ''}" data-src="${s.id}" style="padding:10px 6px">
+                            <div class="cat-icon" style="width:36px;height:36px;font-size:15px;background:${s.color}18;color:${s.color}"><i class="fa-solid ${s.icon}"></i></div>
+                            <span class="cat-name">${s.name}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <p id="cat-error" style="color:var(--danger);font-size:11px;margin-top:6px;display:none"></p>
+            </div>
+
+            <!-- Note & Date -->
+            <div class="card" style="margin-bottom:16px;padding:14px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                    <div>
+                        <label style="font-size:11px;font-weight:600;display:block;margin-bottom:6px;color:var(--fg-dim)">NOTE (OPTIONAL)</label>
+                        <input type="text" id="exp-note" class="input-field" placeholder="What was this for?" value="${note}" maxlength="100">
+                    </div>
+                    <div>
+                        <label style="font-size:11px;font-weight:600;display:block;margin-bottom:6px;color:var(--fg-dim)">DATE</label>
+                        ${dateFieldHTML('exp-date', 'exp-date-text', date)}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Save Button -->
+            <button class="btn-primary" style="width:100%;padding:14px;font-size:16px" onclick="saveExpense('${editId || ''}')">
+                <i class="fa-solid ${editing ? 'fa-check' : 'fa-plus'}" style="margin-right:8px"></i>${editing ? 'Update Expense' : 'Save Expense'}
+            </button>
+        </div>
+    `;
+
+    wireDateField('exp-date', 'exp-date-text');
+
+    // Tab switching between category / source pickers
+    let activeTab = 'category';
+    document.getElementById('pick-tabs').addEventListener('click', e => {
+        const tab = e.target.closest('.seg-tab');
+        if (!tab) return;
+        activeTab = tab.dataset.tab;
+        document.querySelectorAll('#pick-tabs .seg-tab').forEach(t => t.classList.toggle('active', t === tab));
+        document.getElementById('cat-grid').style.display = activeTab === 'category' ? 'grid' : 'none';
+        document.getElementById('src-grid').style.display = activeTab === 'source' ? 'grid' : 'none';
+    });
+
+    // Category selection
+    let selectedC = selectedCat;
+    document.getElementById('cat-grid').addEventListener('click', e => {
+        const item = e.target.closest('.cat-grid-item');
+        if (!item) return;
+        document.querySelectorAll('#cat-grid .cat-grid-item').forEach(i => i.classList.remove('selected'));
+        item.classList.add('selected');
+        selectedC = item.dataset.cat;
+        document.getElementById('cat-error').style.display = 'none';
+        document.querySelector('#pick-tabs .seg-tab[data-tab="category"] span').textContent = ' — ' + getCat(selectedC).name;
+    });
+
+    // Source selection
+    let selectedS = selectedSrc;
+    document.getElementById('src-grid').addEventListener('click', e => {
+        const item = e.target.closest('.cat-grid-item');
+        if (!item) return;
+        document.querySelectorAll('#src-grid .cat-grid-item').forEach(i => i.classList.remove('selected'));
+        item.classList.add('selected');
+        selectedS = item.dataset.src;
+        document.querySelector('#pick-tabs .seg-tab[data-tab="source"] span').textContent = ' — ' + getSrc(selectedS).name;
+    });
+
+    // Store selections for save
+    app._selectedCat = () => selectedC;
+    app._selectedSrc = () => selectedS;
+}
+
+function saveExpense(editId) {
+    const amountEl = document.getElementById('exp-amount');
+    const noteEl = document.getElementById('exp-note');
+    const dateEl = document.getElementById('exp-date');
+    const amountErr = document.getElementById('amount-error');
+    const catErr = document.getElementById('cat-error');
+
+    const amount = parseFloat(amountEl.value);
+    const app = document.getElementById('app');
+    const catId = app._selectedCat ? app._selectedCat() : '';
+    const srcId = app._selectedSrc ? app._selectedSrc() : '';
+    let valid = true;
+
+    if (!amount || amount <= 0) {
+        amountErr.textContent = 'Please enter a valid amount'; amountErr.style.display = 'block'; valid = false;
+    } else { amountErr.style.display = 'none'; }
+
+    if (!catId) {
+        catErr.textContent = 'Please select a category (and source)'; catErr.style.display = 'block'; valid = false;
+    } else { catErr.style.display = 'none'; }
+
+    if (!valid) return;
+
+    if (editId) {
+        const idx = state.expenses.findIndex(e => e.id === editId);
+        if (idx > -1) {
+            state.expenses[idx] = { ...state.expenses[idx], amount, categoryId: catId, sourceId: srcId, note: noteEl.value.trim(), date: dateEl.value };
+        }
+        toast('Expense updated successfully');
+    } else {
+        state.expenses.unshift({ id: uid(), amount, categoryId: catId, sourceId: srcId, note: noteEl.value.trim(), date: dateEl.value, createdAt: Date.now() });
+        toast('Expense added successfully');
+    }
+    save();
+    navigate('dashboard');
+}
+
+/* ============================================
+   EDIT MODAL
+   ============================================ */
+function openEditModal(id) {
+    const e = state.expenses.find(x => x.id === id);
+    if (!e) return;
+    const cat = getCat(e.categoryId);
+    const src = e.sourceId ? getSrc(e.sourceId) : null;
+    openModal(`
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+            <h3 style="font-size:18px;font-weight:700">Expense Details</h3>
+            <button style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;padding:16px;background:var(--bg-input);border-radius:12px;margin-bottom:20px">
+            <div class="tx-icon" style="background:${cat.color}18;color:${cat.color}"><i class="fa-solid ${cat.icon}"></i></div>
+            <div style="flex:1">
+                <p style="font-weight:500">${e.note || cat.name}</p>
+                <p style="font-size:12px;color:var(--muted)">${fmtDateFull(e.date)} &middot; ${cat.name}${src ? ' &middot; ' + src.name : ''}</p>
+            </div>
+            <p style="font-size:18px;font-weight:700;font-family:var(--font-heading);color:var(--danger)">-${fmt(e.amount)}</p>
+        </div>
+        <div style="display:flex;gap:10px">
+            <button class="btn-secondary" style="flex:1" onclick="closeModal();navigate('add');setTimeout(()=>renderAddExpense('${e.id}'),50)"><i class="fa-solid fa-pen" style="margin-right:6px"></i>Edit</button>
+            <button class="btn-danger" style="flex:1" onclick="deleteExpense('${e.id}')"><i class="fa-solid fa-trash" style="margin-right:6px"></i>Delete</button>
+        </div>
+    `);
+}
+
+function deleteExpense(id) {
+    state.expenses = state.expenses.filter(e => e.id !== id);
+    save(); closeModal(); toast('Expense deleted', 'error');
+    // Re-render current view
+    navigate(currentView);
+}
+
+/* ============================================
+   RENDER: TRANSACTIONS
+   ============================================ */
+function renderTransactions() {
+    const app = document.getElementById('app');
+    app.innerHTML = `
+        <h2 style="font-size:26px;font-weight:700;margin-bottom:20px">Transactions</h2>
+
+        <!-- Filters -->
+        <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px;position:relative">
+                <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px"></i>
+                <input type="text" id="tx-search" class="input-field" placeholder="Search notes..." style="padding-left:38px">
+            </div>
+            <select id="tx-cat-filter" class="input-field" style="width:auto;min-width:150px;cursor:pointer">
+                <option value="">All Categories</option>
+                ${state.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+            </select>
+            <select id="tx-month-filter" class="input-field" style="width:auto;min-width:140px;cursor:pointer">
+                <option value="">All Time</option>
+                ${getMonthOptions()}
+            </select>
+        </div>
+
+        <!-- Results -->
+        <div class="card" style="padding:8px">
+            <div id="tx-list"></div>
+        </div>
+        <div id="tx-summary" style="margin-top:12px;text-align:right;font-size:14px;color:var(--fg-dim)"></div>
+    `;
+
+    function filterAndRender() {
+        const search = document.getElementById('tx-search').value.toLowerCase();
+        const catFilter = document.getElementById('tx-cat-filter').value;
+        const monthFilter = document.getElementById('tx-month-filter').value;
+
+        let filtered = state.expenses.filter(e => {
+            if (search && !(e.note || '').toLowerCase().includes(search) && !getCat(e.categoryId).name.toLowerCase().includes(search)) return false;
+            if (catFilter && e.categoryId !== catFilter) return false;
+            if (monthFilter && !e.date.startsWith(monthFilter)) return false;
+            return true;
+        });
+
+        const listEl = document.getElementById('tx-list');
+        const sumEl = document.getElementById('tx-summary');
+        const total = filtered.reduce((s, e) => s + e.amount, 0);
+
+        if (!filtered.length) {
+            listEl.innerHTML = '<div class="empty-state"><i class="fa-solid fa-search"></i><p>No transactions found</p></div>';
+            sumEl.textContent = '';
+        } else {
+            listEl.innerHTML = renderTxList(filtered);
+            sumEl.innerHTML = `<span style="color:var(--muted)">${filtered.length} transaction${filtered.length > 1 ? 's' : ''}</span> &middot; <span style="color:var(--danger);font-weight:600;font-family:var(--font-heading)">Total: -${fmt(total)}</span>`;
+        }
+    }
+
+    document.getElementById('tx-search').addEventListener('input', filterAndRender);
+    document.getElementById('tx-cat-filter').addEventListener('change', filterAndRender);
+    document.getElementById('tx-month-filter').addEventListener('change', filterAndRender);
+    filterAndRender();
+}
+
+function getMonthOptions() {
+    const months = new Set();
+    state.expenses.forEach(e => months.add(e.date.slice(0, 7)));
+    return [...months].sort().reverse().map(m => {
+        const [y, mo] = m.split('-');
+        const label = new Date(parseInt(y), parseInt(mo) - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        return `<option value="${m}">${label}</option>`;
+    }).join('');
+}
+
+/* ============================================
+   RENDER: REPORTS (dynamic category + source
+   breakdown tabs — filters apply together)
+   ============================================ */
+function toISO(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+function syncReportSelections() {
+    if (!reportState.selectedCats) reportState.selectedCats = state.categories.map(c => c.id);
+    else reportState.selectedCats = reportState.selectedCats.filter(id => state.categories.some(c => c.id === id));
+    if (!reportState.selectedSrcs) reportState.selectedSrcs = state.sources.map(s => s.id);
+    else reportState.selectedSrcs = reportState.selectedSrcs.filter(id => state.sources.some(s => s.id === id));
+}
+
+function getWeekNumber(date) {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+    const week1 = new Date(d.getFullYear(), 0, 4);
+    return 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+}
+
+function timeBucketKey(dateStr, range) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    if (range === 'week') return `Week ${getWeekNumber(d)}, ${d.getFullYear()}`;
+    if (range === 'month') return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    if (range === 'year') return `${d.getFullYear()}`;
+    return fmtDate(dateStr);
+}
+
+function getReportFiltered() {
+    const from = reportState.fromDate ? new Date(reportState.fromDate + 'T00:00:00') : null;
+    const to = reportState.toDate ? new Date(reportState.toDate + 'T23:59:59') : null;
+    return state.expenses.filter(e => {
+        const d = new Date(e.date + 'T00:00:00');
+        if (from && d < from) return false;
+        if (to && d > to) return false;
+        if (!reportState.selectedCats.includes(e.categoryId)) return false;
+        if (e.sourceId && !reportState.selectedSrcs.includes(e.sourceId)) return false;
+        return true;
+    });
+}
+
+function renderReports() {
+    const app = document.getElementById('app');
+    syncReportSelections();
+    if (!reportState.fromDate || !reportState.toDate) {
+        const now = new Date();
+        reportState.fromDate = toISO(new Date(now.getFullYear(), now.getMonth(), 1));
+        reportState.toDate = toISO(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    }
+
+    app.innerHTML = `
+        <h2 style="font-size:26px;font-weight:700;margin-bottom:6px">Reports</h2>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:20px">Category and source filters are independent and apply together.</p>
+
+        <div class="card" style="margin-bottom:16px">
+            <label style="font-size:11px;font-weight:600;color:var(--fg-dim);display:block;margin-bottom:6px">BREAKDOWN</label>
+            <select id="rpt-breakdown" class="input-field" style="cursor:pointer;margin-bottom:12px">
+                <option value="category">📊 By Category</option>
+                <option value="source">💰 By Source</option>
+                <option value="time">📈 By Time (no grouping)</option>
+            </select>
+            <div class="seg-tabs" id="rpt-range-tabs" style="display:none;margin-bottom:16px">
+                <div class="seg-tab" data-range="day">Day</div>
+                <div class="seg-tab" data-range="week">Week</div>
+                <div class="seg-tab" data-range="month">Month</div>
+                <div class="seg-tab" data-range="year">Year</div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
+                <div>
+                    <label style="font-size:11px;font-weight:600;color:var(--fg-dim);display:block;margin-bottom:6px">FROM</label>
+                    ${dateFieldHTML('rpt-from', 'rpt-from-text', reportState.fromDate)}
+                </div>
+                <div>
+                    <label style="font-size:11px;font-weight:600;color:var(--fg-dim);display:block;margin-bottom:6px">TO</label>
+                    ${dateFieldHTML('rpt-to', 'rpt-to-text', reportState.toDate)}
+                </div>
+            </div>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <span style="font-size:11px;font-weight:600;color:var(--fg-dim);text-transform:uppercase">Categories</span>
+                <span><span class="filter-link" id="rpt-cat-all">All</span> &nbsp; <span class="filter-link" id="rpt-cat-none">None</span></span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px" id="rpt-cat-chips"></div>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <span style="font-size:11px;font-weight:600;color:var(--fg-dim);text-transform:uppercase">Sources</span>
+                <span><span class="filter-link" id="rpt-src-all">All</span> &nbsp; <span class="filter-link" id="rpt-src-none">None</span></span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px" id="rpt-src-chips"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+            <div style="height:260px;position:relative" id="rpt-chart-wrap"></div>
+        </div>
+
+        <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px">
+                <h3 style="font-size:15px;font-weight:600">Summary</h3>
+                <span id="rpt-count" style="font-size:12px;color:var(--muted)"></span>
+            </div>
+            <div id="rpt-summary-list"></div>
+        </div>
+    `;
+
+    document.getElementById('rpt-breakdown').value = reportState.breakdown;
+    wireDateField('rpt-from', 'rpt-from-text');
+    wireDateField('rpt-to', 'rpt-to-text');
+
+    document.getElementById('rpt-breakdown').addEventListener('change', e => {
+        reportState.breakdown = e.target.value;
+        document.getElementById('rpt-range-tabs').style.display = reportState.breakdown === 'time' ? 'flex' : 'none';
+        refreshReports();
+    });
+    document.querySelectorAll('#rpt-range-tabs .seg-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.range === reportState.range);
+        t.addEventListener('click', () => {
+            reportState.range = t.dataset.range;
+            document.querySelectorAll('#rpt-range-tabs .seg-tab').forEach(x => x.classList.toggle('active', x === t));
+            refreshReports();
+        });
+    });
+    document.getElementById('rpt-range-tabs').style.display = reportState.breakdown === 'time' ? 'flex' : 'none';
+
+    document.getElementById('rpt-from').addEventListener('change', () => { reportState.fromDate = document.getElementById('rpt-from').value; refreshReports(); });
+    document.getElementById('rpt-to').addEventListener('change', () => { reportState.toDate = document.getElementById('rpt-to').value; refreshReports(); });
+
+    document.getElementById('rpt-cat-all').addEventListener('click', () => { reportState.selectedCats = state.categories.map(c => c.id); refreshReports(); });
+    document.getElementById('rpt-cat-none').addEventListener('click', () => { reportState.selectedCats = []; refreshReports(); });
+    document.getElementById('rpt-src-all').addEventListener('click', () => { reportState.selectedSrcs = state.sources.map(s => s.id); refreshReports(); });
+    document.getElementById('rpt-src-none').addEventListener('click', () => { reportState.selectedSrcs = []; refreshReports(); });
+
+    refreshReports();
+}
+
+function renderReportChips() {
+    const from = reportState.fromDate ? new Date(reportState.fromDate + 'T00:00:00') : null;
+    const to = reportState.toDate ? new Date(reportState.toDate + 'T23:59:59') : null;
+    const dateFiltered = state.expenses.filter(e => {
+        const d = new Date(e.date + 'T00:00:00');
+        if (from && d < from) return false;
+        if (to && d > to) return false;
+        return true;
+    });
+
+    const catCounts = {};
+    dateFiltered.filter(e => e.sourceId ? reportState.selectedSrcs.includes(e.sourceId) : true).forEach(e => { catCounts[e.categoryId] = (catCounts[e.categoryId] || 0) + e.amount; });
+    document.getElementById('rpt-cat-chips').innerHTML = state.categories.map(c => {
+        const active = reportState.selectedCats.includes(c.id);
+        return `<div class="filter-chip ${active ? 'active' : ''}" style="--chip-color:${c.color};--chip-bg:${c.color}18" data-kind="cat" data-id="${c.id}"><span class="dot" style="background:${c.color}"></span>${c.name} <span style="opacity:.65">${fmt(catCounts[c.id] || 0)}</span></div>`;
+    }).join('') || '<span style="font-size:12px;color:var(--muted)">No categories yet</span>';
+
+    const srcCounts = {};
+    dateFiltered.filter(e => reportState.selectedCats.includes(e.categoryId)).forEach(e => { if (e.sourceId) srcCounts[e.sourceId] = (srcCounts[e.sourceId] || 0) + e.amount; });
+    document.getElementById('rpt-src-chips').innerHTML = state.sources.map(s => {
+        const active = reportState.selectedSrcs.includes(s.id);
+        return `<div class="filter-chip ${active ? 'active' : ''}" style="--chip-color:${s.color};--chip-bg:${s.color}18" data-kind="src" data-id="${s.id}"><span class="dot" style="background:${s.color}"></span>${s.name} <span style="opacity:.65">${fmt(srcCounts[s.id] || 0)}</span></div>`;
+    }).join('') || '<span style="font-size:12px;color:var(--muted)">No sources yet</span>';
+
+    document.querySelectorAll('#rpt-cat-chips .filter-chip, #rpt-src-chips .filter-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const arr = chip.dataset.kind === 'cat' ? reportState.selectedCats : reportState.selectedSrcs;
+            const idx = arr.indexOf(chip.dataset.id);
+            if (idx > -1) arr.splice(idx, 1); else arr.push(chip.dataset.id);
+            refreshReports();
+        });
+    });
+}
+
+function refreshReports() {
+    renderReportChips();
+    const filtered = getReportFiltered();
+    const total = filtered.reduce((s, e) => s + e.amount, 0);
+    document.getElementById('rpt-count').textContent = `${filtered.length} entries · ${fmt(total)}`;
+
+    let grouped = {};
+    if (reportState.breakdown === 'category') {
+        filtered.forEach(e => { const c = getCat(e.categoryId); grouped[c.name] = grouped[c.name] || { amt: 0, color: c.color }; grouped[c.name].amt += e.amount; });
+    } else if (reportState.breakdown === 'source') {
+        filtered.forEach(e => { const s = e.sourceId ? getSrc(e.sourceId) : { name: 'Unspecified', color: '#6b7280' }; grouped[s.name] = grouped[s.name] || { amt: 0, color: s.color }; grouped[s.name].amt += e.amount; });
+    } else {
+        filtered.forEach(e => { const key = timeBucketKey(e.date, reportState.range); grouped[key] = grouped[key] || { amt: 0, color: '#f59e0b' }; grouped[key].amt += e.amount; });
+    }
+
+    const labels = Object.keys(grouped);
+    const values = labels.map(l => grouped[l].amt);
+    const colors = labels.map(l => grouped[l].color);
+
+    const wrap = document.getElementById('rpt-chart-wrap');
+    if (chartReport) { chartReport.destroy(); chartReport = null; }
+    if (!labels.length) {
+        wrap.innerHTML = '<div class="empty-state" style="padding:30px"><i class="fa-solid fa-chart-pie"></i><p>No expenses match these filters</p></div>';
+    } else {
+        wrap.innerHTML = '<canvas id="chart-report"></canvas>';
+        const cd = getChartDefaults();
+        chartReport = new Chart(document.getElementById('chart-report'), {
+            type: 'doughnut',
+            data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: '#ffffff', hoverOffset: 8 }] },
+            options: { ...cd, cutout: '62%', plugins: { ...cd.plugins, legend: { position: 'bottom', labels: { ...cd.plugins.legend.labels, boxWidth: 10, padding: 10, font: { size: 11 } } } } }
+        });
+    }
+
+    const sorted = labels.map(l => ({ label: l, ...grouped[l] })).sort((a, b) => b.amt - a.amt);
+    document.getElementById('rpt-summary-list').innerHTML = sorted.length ? sorted.map(item => `
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+            <span style="width:10px;height:10px;border-radius:50%;background:${item.color};flex-shrink:0"></span>
+            <span style="flex:1;font-size:13px">${item.label}</span>
+            <span style="font-size:13px;font-weight:600;font-family:var(--font-heading)">${fmt(item.amt)}</span>
+            <span style="font-size:11px;color:var(--muted);width:42px;text-align:right">${total ? Math.round(item.amt / total * 100) : 0}%</span>
+        </div>
+    `).join('') : '<div class="empty-state" style="padding:20px"><p>No data for this period</p></div>';
+}
+
+/* ============================================
+   RENDER: CATEGORIES & SOURCES
+   ============================================ */
+let catSrcTab = 'category';
+
+function renderCategories() {
+    const app = document.getElementById('app');
+    catSrcTab = catSrcTab === 'source' ? 'source' : 'category';
+
+    app.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+            <h2 style="font-size:26px;font-weight:700">Categories & Sources</h2>
+            <button class="btn-primary btn-sm" id="cs-add-btn"><i class="fa-solid fa-plus" style="margin-right:6px"></i><span id="cs-add-label">Add Category</span></button>
+        </div>
+        <div class="seg-tabs" style="max-width:320px;margin-bottom:20px">
+            <div class="seg-tab ${catSrcTab === 'category' ? 'active' : ''}" data-kind="category"><i class="fa-solid fa-tag" style="margin-right:6px;font-size:11px"></i>Categories</div>
+            <div class="seg-tab ${catSrcTab === 'source' ? 'active' : ''}" data-kind="source"><i class="fa-solid fa-wallet" style="margin-right:6px;font-size:11px"></i>Sources</div>
+        </div>
+        <div id="cs-grid"></div>
+    `;
+
+    document.querySelectorAll('#app .seg-tabs .seg-tab').forEach(t => {
+        t.addEventListener('click', () => { catSrcTab = t.dataset.kind; renderCategories(); });
+    });
+    document.getElementById('cs-add-btn').addEventListener('click', () => openAddItemModal(catSrcTab));
+    document.getElementById('cs-add-label').textContent = catSrcTab === 'category' ? 'Add Category' : 'Add Source';
+
+    renderCsGrid();
+}
+
+function renderCsGrid() {
+    const kind = catSrcTab;
+    const list = kind === 'category' ? state.categories : state.sources;
+    const field = kind === 'category' ? 'categoryId' : 'sourceId';
+    const stats = {};
+    state.expenses.forEach(e => { const k = e[field]; if (k) stats[k] = (stats[k] || 0) + e.amount; });
+    const grandTotal = Object.values(stats).reduce((a, b) => a + b, 0) || 1;
+
+    const gridEl = document.getElementById('cs-grid');
+    gridEl.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">
+            ${list.map(item => {
+                const spent = stats[item.id] || 0;
+                const count = state.expenses.filter(e => e[field] === item.id).length;
+                return `<div class="card" style="cursor:default">
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+                        <div style="width:44px;height:44px;border-radius:12px;background:${item.color}18;color:${item.color};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0"><i class="fa-solid ${item.icon}"></i></div>
+                        <div style="flex:1;min-width:0">
+                            <p style="font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</p>
+                            <p style="font-size:12px;color:var(--muted)">${count} transaction${count !== 1 ? 's' : ''}</p>
+                        </div>
+                        <div style="display:flex;gap:4px">
+                            <button style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--fg-dim);font-size:12px;transition:all 0.15s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--fg-dim)'" onclick="openEditItemModal('${kind}','${item.id}')"><i class="fa-solid fa-pen"></i></button>
+                            <button style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--fg-dim);font-size:12px;transition:all 0.15s" onmouseover="this.style.borderColor='var(--danger)';this.style.color='var(--danger)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--fg-dim)'" onclick="confirmDeleteItem('${kind}','${item.id}')"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:baseline">
+                        <span style="font-size:12px;color:var(--muted)">Total spent</span>
+                        <span style="font-size:16px;font-weight:700;font-family:var(--font-heading)">${fmt(spent)}</span>
+                    </div>
+                    <div style="height:4px;background:var(--bg-input);border-radius:2px;margin-top:8px;overflow:hidden">
+                        <div style="height:100%;width:${Math.min(100, spent / grandTotal * 100)}%;background:${item.color};border-radius:2px;transition:width 0.5s ease"></div>
+                    </div>
+                </div>`;
+            }).join('')}
+        </div>
+        ${!list.length ? `<div class="empty-state"><i class="fa-solid ${kind === 'category' ? 'fa-tags' : 'fa-wallet'}"></i><p>No ${kind === 'category' ? 'categories' : 'sources'} yet</p></div>` : ''}
+    `;
+}
+
+function openAddItemModal(kind) {
+    const label = kind === 'category' ? 'Category' : 'Source';
+    openModal(`
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+            <h3 style="font-size:18px;font-weight:700">New ${label}</h3>
+            <button style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div style="margin-bottom:14px">
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Name</label>
+            <input type="text" id="new-item-name" class="input-field" placeholder="${label} name" maxlength="30">
+        </div>
+        <div style="margin-bottom:14px">
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:8px">Icon</label>
+            <div style="display:flex;flex-wrap:wrap;gap:6px" id="icon-picker">
+                ${ICON_OPTIONS.map((ic, i) => `<div class="icon-opt ${i === 0 ? 'selected' : ''}" data-icon="${ic}"><i class="fa-solid ${ic}"></i></div>`).join('')}
+            </div>
+        </div>
+        <div style="margin-bottom:20px">
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:8px">Color</label>
+            <div style="display:flex;flex-wrap:wrap;gap:6px" id="color-picker">
+                ${COLOR_OPTIONS.map((c, i) => `<div class="color-opt ${i === 0 ? 'selected' : ''}" data-color="${c}" style="background:${c}"></div>`).join('')}
+            </div>
+        </div>
+        <button class="btn-primary" style="width:100%" onclick="saveNewItem('${kind}')">Create ${label}</button>
+    `);
+    setupPickers();
+}
+
+function openEditItemModal(kind, id) {
+    const list = kind === 'category' ? state.categories : state.sources;
+    const item = list.find(x => x.id === id);
+    if (!item) return;
+    const label = kind === 'category' ? 'Category' : 'Source';
+    openModal(`
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+            <h3 style="font-size:18px;font-weight:700">Edit ${label}</h3>
+            <button style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div style="margin-bottom:14px">
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Name</label>
+            <input type="text" id="new-item-name" class="input-field" value="${item.name}" maxlength="30">
+        </div>
+        <div style="margin-bottom:14px">
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:8px">Icon</label>
+            <div style="display:flex;flex-wrap:wrap;gap:6px" id="icon-picker">
+                ${ICON_OPTIONS.map(ic => `<div class="icon-opt ${item.icon === ic ? 'selected' : ''}" data-icon="${ic}"><i class="fa-solid ${ic}"></i></div>`).join('')}
+            </div>
+        </div>
+        <div style="margin-bottom:20px">
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:8px">Color</label>
+            <div style="display:flex;flex-wrap:wrap;gap:6px" id="color-picker">
+                ${COLOR_OPTIONS.map(c => `<div class="color-opt ${item.color === c ? 'selected' : ''}" data-color="${c}" style="background:${c}"></div>`).join('')}
+            </div>
+        </div>
+        <button class="btn-primary" style="width:100%" onclick="saveEditItem('${kind}','${id}')">Update ${label}</button>
+    `);
+    setupPickers();
+}
+
+function setupPickers() {
+    let selIcon = document.querySelector('#icon-picker .selected')?.dataset.icon || ICON_OPTIONS[0];
+    let selColor = document.querySelector('#color-picker .selected')?.dataset.color || COLOR_OPTIONS[0];
+
+    document.getElementById('icon-picker').addEventListener('click', e => {
+        const opt = e.target.closest('.icon-opt');
+        if (!opt) return;
+        document.querySelectorAll('#icon-picker .icon-opt').forEach(o => o.classList.remove('selected'));
+        opt.classList.add('selected');
+        selIcon = opt.dataset.icon;
+    });
+    document.getElementById('color-picker').addEventListener('click', e => {
+        const opt = e.target.closest('.color-opt');
+        if (!opt) return;
+        document.querySelectorAll('#color-picker .color-opt').forEach(o => o.classList.remove('selected'));
+        opt.classList.add('selected');
+        selColor = opt.dataset.color;
+    });
+
+    // Store getters
+    document.getElementById('modal-box')._getIcon = () => selIcon;
+    document.getElementById('modal-box')._getColor = () => selColor;
+}
+
+function saveNewItem(kind) {
+    const name = document.getElementById('new-item-name').value.trim();
+    if (!name) { toast('Please enter a name', 'error'); return; }
+    const list = kind === 'category' ? state.categories : state.sources;
+    if (list.some(c => c.name.toLowerCase() === name.toLowerCase())) { toast((kind === 'category' ? 'Category' : 'Source') + ' already exists', 'error'); return; }
+    const modal = document.getElementById('modal-box');
+    list.push({ id: uid(), name, icon: modal._getIcon(), color: modal._getColor() });
+    save(); closeModal(); toast((kind === 'category' ? 'Category' : 'Source') + ' created'); renderCategories();
+}
+
+function saveEditItem(kind, id) {
+    const name = document.getElementById('new-item-name').value.trim();
+    if (!name) { toast('Please enter a name', 'error'); return; }
+    const modal = document.getElementById('modal-box');
+    const list = kind === 'category' ? state.categories : state.sources;
+    const item = list.find(x => x.id === id);
+    if (item) { item.name = name; item.icon = modal._getIcon(); item.color = modal._getColor(); }
+    save(); closeModal(); toast((kind === 'category' ? 'Category' : 'Source') + ' updated'); renderCategories();
+}
+
+function confirmDeleteItem(kind, id) {
+    const list = kind === 'category' ? state.categories : state.sources;
+    const item = list.find(x => x.id === id) || { name: 'Unknown' };
+    const field = kind === 'category' ? 'categoryId' : 'sourceId';
+    const count = state.expenses.filter(e => e[field] === id).length;
+    const impact = kind === 'category'
+        ? (count ? `This will also delete ${count} associated transaction${count > 1 ? 's' : ''}.` : 'No transactions use this category.')
+        : (count ? `${count} transaction${count > 1 ? 's' : ''} will be kept but marked "Unspecified" source.` : 'No transactions use this source.');
+    openModal(`
+        <div style="text-align:center;padding:10px 0">
+            <div style="width:56px;height:56px;border-radius:50%;background:var(--danger-glow);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:24px;color:var(--danger)"><i class="fa-solid fa-trash"></i></div>
+            <h3 style="font-size:18px;font-weight:700;margin-bottom:8px">Delete "${item.name}"?</h3>
+            <p style="color:var(--fg-dim);font-size:14px;margin-bottom:24px">${impact} This cannot be undone.</p>
+            <div style="display:flex;gap:10px">
+                <button class="btn-secondary" style="flex:1" onclick="closeModal()">Cancel</button>
+                <button class="btn-danger" style="flex:1" onclick="deleteItem('${kind}','${id}')">Delete</button>
+            </div>
+        </div>
+    `);
+}
+
+function deleteItem(kind, id) {
+    if (kind === 'category') {
+        state.expenses = state.expenses.filter(e => e.categoryId !== id);
+        state.categories = state.categories.filter(c => c.id !== id);
+    } else {
+        state.expenses.forEach(e => { if (e.sourceId === id) e.sourceId = null; });
+        state.sources = state.sources.filter(s => s.id !== id);
+    }
+    save(); closeModal(); toast((kind === 'category' ? 'Category' : 'Source') + ' deleted', 'error'); renderCategories();
+}
+
+/* ============================================
+   RENDER: BACKUP & RESTORE
+   ============================================ */
+function renderBackup() {
+    const app = document.getElementById('app');
+    const dataSize = new Blob([JSON.stringify(state)]).size;
+    const sizeStr = dataSize > 1024 ? (dataSize / 1024).toFixed(1) + ' KB' : dataSize + ' B';
+
+    app.innerHTML = `
+        <h2 style="font-size:26px;font-weight:700;margin-bottom:8px">Backup & Restore</h2>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:28px">Export your data for safekeeping or import from a previous backup — including backups exported from the old tracker.</p>
+
+        <!-- Data Summary -->
+        <div class="card" style="margin-bottom:20px">
+            <h3 style="font-size:15px;font-weight:600;margin-bottom:14px">Current Data</h3>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px">
+                <div style="padding:12px;background:var(--bg-input);border-radius:10px;text-align:center">
+                    <p style="font-size:24px;font-weight:700;font-family:var(--font-heading)">${state.expenses.length}</p>
+                    <p style="font-size:11px;color:var(--muted)">Transactions</p>
+                </div>
+                <div style="padding:12px;background:var(--bg-input);border-radius:10px;text-align:center">
+                    <p style="font-size:24px;font-weight:700;font-family:var(--font-heading)">${state.categories.length}</p>
+                    <p style="font-size:11px;color:var(--muted)">Categories</p>
+                </div>
+                <div style="padding:12px;background:var(--bg-input);border-radius:10px;text-align:center">
+                    <p style="font-size:24px;font-weight:700;font-family:var(--font-heading)">${state.sources.length}</p>
+                    <p style="font-size:11px;color:var(--muted)">Sources</p>
+                </div>
+                <div style="padding:12px;background:var(--bg-input);border-radius:10px;text-align:center">
+                    <p style="font-size:24px;font-weight:700;font-family:var(--font-heading)">${sizeStr}</p>
+                    <p style="font-size:11px;color:var(--muted)">Storage Used</p>
+                </div>
+                <div style="padding:12px;background:var(--bg-input);border-radius:10px;text-align:center">
+                    <p style="font-size:24px;font-weight:700;font-family:var(--font-heading)">${state.lastBackup ? fmtDate(state.lastBackup) : 'Never'}</p>
+                    <p style="font-size:11px;color:var(--muted)">Last Backup</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Backup -->
+        <div class="card" style="margin-bottom:20px;border-color:rgba(16,185,129,0.2)">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+                <div style="width:40px;height:40px;border-radius:10px;background:var(--success-glow);color:var(--success);display:flex;align-items:center;justify-content:center;font-size:16px"><i class="fa-solid fa-cloud-arrow-down"></i></div>
+                <div>
+                    <h3 style="font-size:15px;font-weight:600">Export Backup</h3>
+                    <p style="font-size:12px;color:var(--muted)">Download all your data as a JSON file</p>
+                </div>
+            </div>
+            <button class="btn-primary" style="width:100%;background:var(--success)" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='var(--success)'" onclick="exportBackup()">
+                <i class="fa-solid fa-download" style="margin-right:8px"></i>Download Backup
+            </button>
+        </div>
+
+        <!-- Restore -->
+        <div class="card" style="margin-bottom:20px;border-color:rgba(59,130,246,0.2)">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+                <div style="width:40px;height:40px;border-radius:10px;background:rgba(59,130,246,0.15);color:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:16px"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                <div>
+                    <h3 style="font-size:15px;font-weight:600">Import Backup</h3>
+                    <p style="font-size:12px;color:var(--muted)">Restore from a SpendWise backup, or a JSON export from the old tracker</p>
+                </div>
+            </div>
+            <button class="btn-secondary" style="width:100%;border-color:rgba(59,130,246,0.3)" onclick="document.getElementById('restore-input').click()">
+                <i class="fa-solid fa-upload" style="margin-right:8px"></i>Choose Backup File
+            </button>
+            <p style="font-size:11px;color:var(--muted);margin-top:8px"><i class="fa-solid fa-triangle-exclamation" style="margin-right:4px;color:var(--accent)"></i>This will replace all current data with the backup.</p>
+        </div>
+
+        <!-- Appearance -->
+        <div class="card" style="margin-bottom:20px">
+            <h3 style="font-size:15px;font-weight:600;margin-bottom:14px">Appearance</h3>
+            <label style="font-size:12px;color:var(--fg-dim);display:block;margin-bottom:6px">App font</label>
+            <select id="font-select" class="input-field" style="cursor:pointer">
+                ${FONT_OPTIONS.map((f, i) => `<option value="${i}" ${state.fontIndex === i ? 'selected' : ''}>${f.name}</option>`).join('')}
+            </select>
+            <p id="font-preview" style="margin-top:12px;font-size:15px;font-weight:600">The quick brown fox jumps — ${state.currency}1,234.50</p>
+        </div>
+
+        <!-- Currency Setting -->
+        <div class="card" style="margin-bottom:20px">
+            <h3 style="font-size:15px;font-weight:600;margin-bottom:14px">Currency</h3>
+            <select id="currency-select" class="input-field" style="cursor:pointer">
+                ${CURRENCIES.map(c => `<option value="${c.symbol}" ${state.currency === c.symbol ? 'selected' : ''}>${c.symbol} — ${c.name}</option>`).join('')}
+            </select>
+            <button class="btn-secondary btn-sm" style="margin-top:10px" onclick="state.currency=document.getElementById('currency-select').value;save();toast('Currency updated');renderBackup()">Save Currency</button>
+        </div>
+
+        <!-- Install PWA -->
+        <div class="card" style="margin-bottom:20px;border-color:rgba(245,158,11,0.2)" id="install-card">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+                <div style="width:40px;height:40px;border-radius:10px;background:var(--accent-glow);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:16px"><i class="fa-solid fa-mobile-screen-button"></i></div>
+                <div>
+                    <h3 style="font-size:15px;font-weight:600">Install App</h3>
+                    <p style="font-size:12px;color:var(--muted)">Install SpendWise on your device for quick access</p>
+                </div>
+            </div>
+            <button class="btn-primary" id="install-btn" style="width:100%" onclick="installPWA()">
+                <i class="fa-solid fa-download" style="margin-right:8px"></i>Install SpendWise
+            </button>
+        </div>
+
+        <!-- Danger Zone -->
+        <div class="card" style="border-color:rgba(239,68,68,0.2)">
+            <h3 style="font-size:15px;font-weight:600;margin-bottom:8px;color:var(--danger)">Danger Zone</h3>
+            <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Permanently delete all your data. This cannot be undone.</p>
+            <button class="btn-danger btn-sm" onclick="confirmClearAll()">
+                <i class="fa-solid fa-trash" style="margin-right:6px"></i>Clear All Data
+            </button>
+        </div>
+    `;
+
+    // Hide install card if not available
+    if (!deferredPrompt) {
+        const card = document.getElementById('install-card');
+        if (card) card.style.display = 'none';
+    }
+
+    document.getElementById('font-select').addEventListener('change', e => {
+        state.fontIndex = parseInt(e.target.value);
+        applyFont();
+        save();
+        const f = FONT_OPTIONS[state.fontIndex];
+        document.getElementById('font-preview').style.fontFamily = f.body;
+    });
+}
+
+function exportBackup() {
+    const data = {
+        app: 'SpendWise',
+        version: '2.0.0',
+        exportedAt: new Date().toISOString(),
+        data: { expenses: state.expenses, categories: state.categories, sources: state.sources, currency: state.currency, fontIndex: state.fontIndex }
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `spendwise-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    state.lastBackup = new Date().toISOString().split('T')[0];
+    save();
+    toast('Backup downloaded successfully');
+    renderBackup();
+}
+
+// Converts a backup exported from the old (non-SpendWise) tracker — where categories/
+// sources were plain string lists and expenses referenced them by name — into SpendWise's
+// id-based structure, generating icons/colors for anything it doesn't recognize.
+function convertOldBackup(raw) {
+    const oldCategoryNames = Array.isArray(raw.categories) && raw.categories.length
+        ? raw.categories : ['Food', 'Transport', 'Shopping', 'Bills', 'Entertainment', 'Health', 'Other'];
+    const oldSourceNames = Array.isArray(raw.sources) && raw.sources.length
+        ? raw.sources : ['Cash', 'Bank', 'UPI', 'Credit Card', 'Other'];
+    const oldExpenses = Array.isArray(raw.expenses) ? raw.expenses : (Array.isArray(raw) ? raw : []);
+
+    const catIconMap = { food: 'fa-utensils', transport: 'fa-car', shopping: 'fa-bag-shopping', bills: 'fa-bolt', entertainment: 'fa-film', health: 'fa-heart-pulse', other: 'fa-ellipsis' };
+    const catColorMap = { food: '#3b82f6', transport: '#f59e0b', shopping: '#ef4444', bills: '#8b5cf6', entertainment: '#10b981', health: '#ec4899', other: '#6b7280' };
+    const srcIconMap = { cash: 'fa-money-bill-wave', bank: 'fa-building-columns', upi: 'fa-mobile-screen-button', 'credit card': 'fa-credit-card', other: 'fa-wallet' };
+    const srcColorMap = { cash: '#10b981', bank: '#3b82f6', upi: '#8b5cf6', 'credit card': '#f59e0b', other: '#6b7280' };
+
+    const categories = oldCategoryNames.map((name, i) => ({
+        id: uid(), name,
+        icon: catIconMap[String(name).toLowerCase()] || ICON_OPTIONS[i % ICON_OPTIONS.length],
+        color: catColorMap[String(name).toLowerCase()] || COLOR_OPTIONS[i % COLOR_OPTIONS.length]
+    }));
+    const sources = oldSourceNames.map((name, i) => ({
+        id: uid(), name,
+        icon: srcIconMap[String(name).toLowerCase()] || ICON_OPTIONS[i % ICON_OPTIONS.length],
+        color: srcColorMap[String(name).toLowerCase()] || COLOR_OPTIONS[i % COLOR_OPTIONS.length]
+    }));
+
+    const catByName = {}; categories.forEach(c => catByName[c.name.toLowerCase()] = c);
+    const srcByName = {}; sources.forEach(s => srcByName[s.name.toLowerCase()] = s);
+
+    const expenses = oldExpenses
+        .filter(e => e && typeof e === 'object' && e.amount != null && e.category && e.date)
+        .map((e, i) => {
+            let cat = catByName[String(e.category).toLowerCase()];
+            if (!cat) {
+                cat = { id: uid(), name: String(e.category), icon: 'fa-ellipsis', color: COLOR_OPTIONS[categories.length % COLOR_OPTIONS.length] };
+                categories.push(cat); catByName[cat.name.toLowerCase()] = cat;
+            }
+            let src = null;
+            if (e.source) {
+                src = srcByName[String(e.source).toLowerCase()];
+                if (!src) {
+                    src = { id: uid(), name: String(e.source), icon: 'fa-wallet', color: COLOR_OPTIONS[sources.length % COLOR_OPTIONS.length] };
+                    sources.push(src); srcByName[src.name.toLowerCase()] = src;
+                }
+            }
+            return {
+                id: uid(),
+                amount: Number(e.amount) || 0,
+                categoryId: cat.id,
+                sourceId: src ? src.id : null,
+                note: e.description || e.note || '',
+                date: e.date,
+                createdAt: typeof e.id === 'number' ? e.id : (Date.now() - i)
+            };
+        });
+
+    return { expenses, categories, sources, currency: state.currency || '₹' };
+}
+
+// Restore handler — accepts native SpendWise backups AND JSON exported from the old tracker
+document.getElementById('restore-input').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        try {
+            const parsed = JSON.parse(ev.target.result);
+            let converted, sourceLabel;
+
+            if (parsed.data && Array.isArray(parsed.data.expenses) && Array.isArray(parsed.data.categories)) {
+                // Native SpendWise format
+                const validExp = parsed.data.expenses.every(x => x.id && typeof x.amount === 'number' && x.categoryId && x.date);
+                const validCat = parsed.data.categories.every(c => c.id && c.name && c.icon && c.color);
+                if (!validExp || !validCat) { toast('Backup file contains invalid data', 'error'); return; }
+                converted = {
+                    expenses: parsed.data.expenses,
+                    categories: parsed.data.categories,
+                    sources: (Array.isArray(parsed.data.sources) && parsed.data.sources.length) ? parsed.data.sources : JSON.parse(JSON.stringify(DEFAULT_SOURCES)),
+                    currency: parsed.data.currency || state.currency
+                };
+                sourceLabel = 'SpendWise backup';
+            } else if (Array.isArray(parsed.expenses) || Array.isArray(parsed)) {
+                // Old tracker format: top-level expenses[], categories[]/sources[] as plain name strings
+                converted = convertOldBackup(parsed);
+                sourceLabel = 'old tracker backup';
+            } else {
+                toast('Invalid backup file format', 'error');
+                return;
+            }
+
+            if (!converted.expenses.length && !converted.categories.length) {
+                toast('Backup file contains no data', 'error');
+                return;
+            }
+
+            openModal(`
+                <div style="text-align:center;padding:10px 0">
+                    <div style="width:56px;height:56px;border-radius:50%;background:rgba(59,130,246,0.15);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:24px;color:#3b82f6"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                    <h3 style="font-size:18px;font-weight:700;margin-bottom:8px">Restore Backup?</h3>
+                    <p style="color:var(--fg-dim);font-size:14px;margin-bottom:6px">Detected a ${sourceLabel} containing:</p>
+                    <p style="color:var(--fg);font-size:14px;font-weight:600;margin-bottom:4px">${converted.expenses.length} transactions, ${converted.categories.length} categories, ${converted.sources.length} sources</p>
+                    <p style="color:var(--muted);font-size:12px;margin-bottom:24px">Exported: ${parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString() : 'Unknown'}</p>
+                    <p style="color:var(--danger);font-size:13px;margin-bottom:20px"><i class="fa-solid fa-triangle-exclamation" style="margin-right:4px"></i>This will replace all your current data.</p>
+                    <div style="display:flex;gap:10px">
+                        <button class="btn-secondary" style="flex:1" onclick="closeModal()">Cancel</button>
+                        <button class="btn-primary" style="flex:1;background:#3b82f6" onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'" onclick="doRestore()">Restore</button>
+                    </div>
+                </div>
+            `);
+            document.getElementById('modal-box')._backupData = converted;
+        } catch(err) {
+            toast('Failed to read backup file', 'error');
+        }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset for re-import
+});
+
+function doRestore() {
+    const data = document.getElementById('modal-box')._backupData;
+    if (data) {
+        state.expenses = data.expenses;
+        state.categories = data.categories;
+        state.sources = data.sources && data.sources.length ? data.sources : JSON.parse(JSON.stringify(DEFAULT_SOURCES));
+        if (data.currency) state.currency = data.currency;
+        save();
+        closeModal();
+        toast('Data restored successfully');
+        renderBackup();
+    }
+}
+
+function confirmClearAll() {
+    openModal(`
+        <div style="text-align:center;padding:10px 0">
+            <div style="width:56px;height:56px;border-radius:50%;background:var(--danger-glow);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:24px;color:var(--danger)"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <h3 style="font-size:18px;font-weight:700;margin-bottom:8px">Clear All Data?</h3>
+            <p style="color:var(--fg-dim);font-size:14px;margin-bottom:24px">All ${state.expenses.length} transactions, ${state.categories.length} categories and ${state.sources.length} sources will be permanently deleted. This cannot be undone.</p>
+            <div style="display:flex;gap:10px">
+                <button class="btn-secondary" style="flex:1" onclick="closeModal()">Cancel</button>
+                <button class="btn-danger" style="flex:1" onclick="clearAllData()">Delete Everything</button>
+            </div>
+        </div>
+    `);
+}
+
+function clearAllData() {
+    state.expenses = [];
+    state.categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+    state.sources = JSON.parse(JSON.stringify(DEFAULT_SOURCES));
+    state.lastBackup = null;
+    save(); closeModal(); toast('All data cleared', 'error'); renderBackup();
+}
+
+/* ============================================
+   PWA SETUP
+   ============================================ */
+function setupPWA() {
+    // Generate app icon via canvas
+    function generateIcon(size) {
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const r = size * 0.19;
+        // Rounded rect background
+        ctx.fillStyle = '#151821';
+        ctx.beginPath();
+        ctx.roundRect(0, 0, size, size, r);
+        ctx.fill();
+        // Circle
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = Math.max(1, size * 0.04);
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size * 0.27, 0, Math.PI * 2);
+        ctx.stroke();
+        // Dollar sign
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = `bold ${size * 0.32}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('$', size / 2, size / 2 + size * 0.015);
+        return canvas.toDataURL('image/png');
+    }
+
+    const icon192 = generateIcon(192);
+    const icon512 = generateIcon(512);
+
+    // Create manifest
+    const manifest = {
+        name: 'SpendWise — Expense Tracker',
+        short_name: 'SpendWise',
+        description: 'Track your personal expenses with categories, backup & restore',
+        start_url: window.location.href.split('?')[0],
+        display: 'standalone',
+        background_color: '#f4f5fa',
+        theme_color: '#f59e0b',
+        orientation: 'any',
+        icons: [
+            { src: icon192, sizes: '192x192', type: 'image/png' },
+            { src: icon512, sizes: '512x512', type: 'image/png' }
+        ]
+    };
+    const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+    document.getElementById('manifest-link').href = URL.createObjectURL(manifestBlob);
+
+    // Set apple touch icon
+    const link = document.createElement('link');
+    link.rel = 'apple-touch-icon';
+    link.href = icon192;
+    document.head.appendChild(link);
+
+    // Attempt service worker registration (works in Firefox; graceful fallback in Chrome)
+    if ('serviceWorker' in navigator) {
+        const swCode = `
+            const CACHE_NAME = 'spendwise-v1';
+            self.addEventListener('install', e => { self.skipWaiting(); });
+            self.addEventListener('activate', e => { e.waitUntil(clients.claim()); });
+            self.addEventListener('fetch', e => {
+                e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+            });
+        `;
+        try {
+            const swBlob = new Blob([swCode], { type: 'application/javascript' });
+            navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(() => {});
+        } catch(e) {}
+    }
+
+    // Capture install prompt
+    window.addEventListener('beforeinstallprompt', e => {
+        e.preventDefault();
+        deferredPrompt = e;
+    });
+}
+
+function installPWA() {
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(result => {
+            if (result.outcome === 'accepted') toast('App installed successfully');
+            deferredPrompt = null;
+        });
+    } else {
+        toast('Use your browser menu to install this app', 'info');
+    }
+}
+
+/* ============================================
+   KEYBOARD SHORTCUTS
+   ============================================ */
+document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    if (e.key === 'n' || e.key === 'N') { e.preventDefault(); navigate('add'); }
+    if (e.key === 'd' || e.key === 'D') { e.preventDefault(); navigate('dashboard'); }
+    if (e.key === 't' || e.key === 'T') { e.preventDefault(); navigate('transactions'); }
+    if (e.key === 'r' || e.key === 'R') { e.preventDefault(); navigate('reports'); }
+    if (e.key === 'Escape') closeModal();
+});
+
+/* ============================================
+   INIT
+   ============================================ */
+load();
+setupPWA();
+navigate('dashboard');
+</script>
+</body>
+</html>
